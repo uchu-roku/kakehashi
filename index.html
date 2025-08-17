@@ -88,7 +88,15 @@
           <div>
             <label for="region">対象地域（任意）</label>
             <input id="region" type="text" placeholder="例：札幌市／北海道／福岡市など（任意）">
-            <div class="note">地域は地図のセンタリング・地域優先表示に使います</div>
+            <div id="map"></div>
+            <div id="aiOverlay"><div class="spinner"></div></div>
+            </div>
+            
+            <!-- 出典プレースホルダ（初期は非表示） -->
+            <div id="creditNote" class="note" style="display:none;font-size:11px;color:#9ca3af;margin-top:6px"></div>
+            
+            <div id="legend" style="margin-top:10px"></div>
+
           </div>
         </div>
 
