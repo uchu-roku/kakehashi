@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>KAKEHASHI デモ | 衛星データ活用診断（入力 v1.3）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,"><!-- 404抑止 -->
+
 <style>
   :root { --bg:#0b1020; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --accent2:#a78bfa; --danger:#dc2626; --chip:#0b1326; --chipb:#2a3953; }
   *{box-sizing:border-box}
@@ -37,7 +39,6 @@
   .stepper .dot{width:8px;height:8px;border-radius:999px;background:#334155}
   .stepper .dot.active{background:var(--accent)}
   .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid #2a3953;background:#0b1326;border-radius:999px;padding:4px 10px;font-size:12px;color:#cbd5e1}
-  /* ウィザード */
   .wizard{margin-top:16px;border:1px dashed #2a3953;border-radius:12px;padding:14px;background:#0b1326}
   .wizard h3{margin:0 0 8px;font-size:16px}
   .wiz-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
@@ -47,6 +48,7 @@
   .sugg{border:1px solid #2a3953;background:#0b1326;border-radius:10px;padding:10px;margin-top:10px}
   .sugg h4{margin:0 0 4px;font-size:14px}
   .sugg p{margin:0;color:#9ca3af;font-size:12px}
+  @media (max-width: 820px){ .row{grid-template-columns:1fr} .wiz-row{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -70,7 +72,7 @@
         <div class="row">
           <div>
             <label for="industry">業界カテゴリ</label>
-            <select id="industry" required aria-describedby="industryHelp">
+            <select id="industry" aria-describedby="industryHelp">
               <option value="">選択してください</option>
               <option value="インフラ点検/建設">インフラ点検/建設</option>
               <option value="エネルギー/排出監視">エネルギー/排出監視</option>
@@ -98,7 +100,7 @@
         </div>
         <div class="note" id="problemHelp">例：洪水・赤潮・メタン・森林・圃場 などの言葉が入ると精度が上がります。</div>
 
-        <!-- 🧭 ウィザード（業界→困りごと→期待成果） -->
+        <!-- かんたんガイド -->
         <div class="wizard" id="wizard">
           <h3>かんたんガイド（質問に答えるだけ）</h3>
           <div class="wiz-row">
@@ -140,7 +142,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // === 既存UI参照（見つからない場合は安全に抜ける） ===
+  // === DOM参照（無ければ画面に警告を出して終了） ===
   const formEl   = document.getElementById('diagForm');
   const problem  = document.getElementById('problem');
   const industry = document.getElementById('industry');
@@ -150,13 +152,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const charCounter  = document.getElementById('charCounter');
   const insertExample= document.getElementById('insertExample');
 
-  // UIの基盤が無ければ終了（白画面回避）
   if(!formEl || !industry){
+    const wrap = document.querySelector('main .card') || document.body;
+    const warn = document.createElement('div');
+    warn.style.cssText = 'margin:16px;padding:12px;border:1px solid #b91c1c;background:#180d0d;color:#fecaca;border-radius:8px';
+    warn.textContent = '初期化に失敗しました。キャッシュを消して再読み込みしてください（Ctrl+F5 / ?v=バージョン）。';
+    wrap.appendChild(warn);
     console.warn('[KAKEHASHI] base form elements not found. Skip init.');
     return;
   }
 
-  // ＝＝＝ 追加：最小入力ガイド（業界 or 自然文のどちらか1つでOK） ＝＝＝
+  // ＝＝＝ 最小入力ガイドの挿入 ＝＝＝
   (function injectMinGuide(){
     const card = document.querySelector('.card');
     if(!card) return;
@@ -222,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const hintBar = document.createElement('div');
   hintBar.className = 'chips';
   hintBar.style.margin = '8px 0';
-  // ★★ ここが落ちていた：optional chainingで安全化
   problem?.parentElement?.insertAdjacentElement('afterend', hintBar);
 
   function renderHints(text){
