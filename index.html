@@ -1,4 +1,5 @@
 <script>
+document.addEventListener('DOMContentLoaded', () => {
   // ＝＝＝ 追加：最小入力ガイド（業界 or 自然文のどちらか1つでOK） ＝＝＝
   (function injectMinGuide(){
     const card = document.querySelector('.card');
@@ -11,7 +12,7 @@
       </div>
     `;
     const h1 = card.querySelector('h1');
-    h1.insertAdjacentElement('afterend', note);
+    if(h1) h1.insertAdjacentElement('afterend', note);
   })();
 
   // === 既存のNLC/SEGルール（必要最小だけ抽出・流用） ===
@@ -70,25 +71,31 @@
   const charCounter = document.getElementById('charCounter');
   const insertExample = document.getElementById('insertExample');
 
+  // 要素が取れない場合は何もしない（安全化）
+  if(!document.getElementById('diagForm') || !industry) return;
+
   // ＝＝＝ 新：推定チップUI（クリックで採用/解除できる） ＝＝＝
   const hintBar = document.createElement('div');
   hintBar.className = 'chips';
   hintBar.style.margin = '8px 0';
-  problem.parentElement.insertAdjacentElement('afterend', hintBar);
+  if(problem && problem.parentElement){
+    problem.parentElement.insertAdjacentElement('afterend', hintBar);
+  }
 
   function renderHints(text){
     hintBar.innerHTML = '';
     // 業界推定
     const r = classifyIndustry(text);
+    if(nlcHint){
+      if(r){ nlcHint.textContent = `推定：${r.label}（信頼度 ${r.confidence.toFixed(2)}）`; }
+      else { nlcHint.textContent = ""; }
+    }
     if(r){
-      nlcHint.textContent = `推定：${r.label}（信頼度 ${r.confidence.toFixed(2)}）`;
       const c = document.createElement('div'); c.className='chip';
       c.innerHTML = `<label>推定業界：${r.label}</label>`;
       c.style.cursor='pointer';
       c.onclick = ()=>{ industry.value = (industry.value===r.label ? "" : r.label); };
       hintBar.appendChild(c);
-    }else{
-      nlcHint.textContent = "";
     }
     // SEG推定
     const segs = segsFromText(text);
@@ -100,41 +107,45 @@
   }
 
   // 入力イベント
-  problem.addEventListener('input', ()=>{
-    renderHints(problem.value);
-    charCounter.textContent = `${problem.value.length} / ${problem.maxLength}`;
-  });
-  insertExample.addEventListener('click', ()=>{
-    problem.value = "豪雨のとき、どの道路が浸水しやすいか事前に把握したい。";
-    problem.dispatchEvent(new Event('input'));
-  });
+  if(problem){
+    problem.addEventListener('input', ()=>{
+      renderHints(problem.value);
+      if(charCounter) charCounter.textContent = `${problem.value.length} / ${problem.maxLength}`;
+    });
+  }
+  if(insertExample && problem){
+    insertExample.addEventListener('click', ()=>{
+      problem.value = "豪雨のとき、どの道路が浸水しやすいか事前に把握したい。";
+      problem.dispatchEvent(new Event('input'));
+    });
+  }
 
   // ＝＝＝ 新：最小入力バリデーション（業界 or 自然文 のいずれか1つでOK） ＝＝＝
-  document.getElementById('diagForm').addEventListener('submit', (e)=>{
+  const formEl = document.getElementById('diagForm');
+  formEl.addEventListener('submit', (e)=>{
     e.preventDefault();
     const kpis = Array.from(document.querySelectorAll('input[name="kpi"]:checked')).map(i=>i.value);
     const hasIndustry = !!industry.value;
-    const hasProblem  = !!problem.value.trim();
+    const hasProblem  = !!(problem && problem.value.trim());
 
-    // これまでの「業界必須」を廃止 → 最小入力ルールに変更
+    // 「業界必須」を廃止 → 最小入力へ
     if(!hasIndustry && !hasProblem){
-      // 軽量エラー表示
-      problem.classList.add('is-invalid');
+      if(problem) problem.classList.add('is-invalid');
       industry.classList.add('is-invalid');
       alert("最小入力：業界 か 課題（自然文）のどちらか1つを入力してください。");
       return;
     }else{
-      problem.classList.remove('is-invalid');
+      if(problem) problem.classList.remove('is-invalid');
       industry.classList.remove('is-invalid');
     }
 
     // SEG導出（テキスト由来＋業界/KPI由来）
     const segBase = deriveSegs(industry.value, kpis);
-    const segFromText = segsFromText(problem.value);
+    const segFromText = segsFromText(problem ? problem.value : "");
     const segsAll = Array.from(new Set([...segBase, ...segFromText]));
 
     // 保存＆遷移
-    const formPayload = { industry: industry.value, region: region.value.trim(), problem: problem.value.trim(), kpis, segs: segsAll };
+    const formPayload = { industry: industry.value, region: region ? region.value.trim() : "", problem: problem ? problem.value.trim() : "", kpis, segs: segsAll };
     localStorage.setItem('kakehashi:lastForm', JSON.stringify(formPayload));
     localStorage.setItem('kakehashi:lastSegs', JSON.stringify(formPayload.segs||[]));
     const params = new URLSearchParams({ industry:formPayload.industry, region:formPayload.region, problem:formPayload.problem, kpi:kpis.join(',') });
@@ -148,12 +159,13 @@
     try{
       const v = JSON.parse(last);
       if(v.industry) industry.value = v.industry;
-      if(v.region)   region.value   = v.region;
-      if(v.problem){ problem.value = v.problem; problem.dispatchEvent(new Event('input')); }
+      if(region && v.region)   region.value   = v.region;
+      if(problem && v.problem){ problem.value = v.problem; problem.dispatchEvent(new Event('input')); }
       if(Array.isArray(v.kpis)) v.kpis.forEach(k=>{
         const el = Array.from(document.querySelectorAll('input[name="kpi"]')).find(n=>n.value===k);
         if(el) el.checked = true;
       });
     }catch(e){}
   })();
+});
 </script>
