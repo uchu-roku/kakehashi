@@ -6,7 +6,7 @@
 <title>KAKEHASHI デモ | 衛星データ活用診断（入力 v1.3）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="icon" href="data:,"><!-- 404抑止 -->
+<link rel="icon" href="data:,"><!-- favicon 404 を抑止 -->
 
 <style>
   :root { --bg:#0b1020; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --accent2:#a78bfa; --danger:#dc2626; --chip:#0b1326; --chipb:#2a3953; }
@@ -100,7 +100,6 @@
         </div>
         <div class="note" id="problemHelp">例：洪水・赤潮・メタン・森林・圃場 などの言葉が入ると精度が上がります。</div>
 
-        <!-- かんたんガイド -->
         <div class="wizard" id="wizard">
           <h3>かんたんガイド（質問に答えるだけ）</h3>
           <div class="wiz-row">
@@ -142,7 +141,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // === DOM参照（無ければ画面に警告を出して終了） ===
+  // --- DOM 取得（なければ警告表示して終了） ---
   const formEl   = document.getElementById('diagForm');
   const problem  = document.getElementById('problem');
   const industry = document.getElementById('industry');
@@ -162,8 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // ＝＝＝ 最小入力ガイドの挿入 ＝＝＝
-  (function injectMinGuide(){
+  // --- 最小入力ガイドの挿入 ---
+  (function(){
     const card = document.querySelector('.card');
     if(!card) return;
     const note = document.createElement('div');
@@ -171,13 +170,11 @@ document.addEventListener('DOMContentLoaded', () => {
     note.innerHTML = `
       <div class="badge" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #2a3953;background:#0b1326;border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1">
         最小入力：<strong>業界</strong> <span style="opacity:.6">or</span> <strong>課題（自然文）</strong> のどちらか1つでOK
-      </div>
-    `;
-    const h1 = card.querySelector('h1');
-    if(h1) h1.insertAdjacentElement('afterend', note);
+      </div>`;
+    card.querySelector('h1')?.insertAdjacentElement('afterend', note);
   })();
 
-  // === NLC/SEG ルール ===
+  // --- 軽量NLC/SEG 推定 ---
   const NLC_RULES = {
     "インフラ点検/建設": ["橋梁","舗装","法面","変位","沈下","施工","出来形","BIM","CIM","インフラ","InSAR","地盤"],
     "エネルギー/排出監視": ["メタン","フレア","排出","GHG","ESG","二酸化炭素","CO2","オイル","ガス","リーク"],
@@ -224,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return Array.from(new Set([...base, ...bonus]));
   }
 
-  // ＝＝＝ 推定チップUI ＝＝＝
+  // --- 推定チップUI ---
   const hintBar = document.createElement('div');
   hintBar.className = 'chips';
   hintBar.style.margin = '8px 0';
@@ -251,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 入力イベント
   problem?.addEventListener('input', ()=>{
     renderHints(problem.value);
     charCounter && (charCounter.textContent = `${problem.value.length} / ${problem.maxLength}`);
@@ -262,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     problem.dispatchEvent(new Event('input'));
   });
 
-  // ＝＝＝ 最小入力バリデーション（業界 or 自然文 のどちらか1つ） ＝＝＝
+  // --- 最小入力バリデーション（業界 or 自然文） ---
   formEl.addEventListener('submit', (e)=>{
     e.preventDefault();
     const kpis = Array.from(document.querySelectorAll('input[name="kpi"]:checked')).map(i=>i.value);
@@ -295,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     location.href = 'results.html?' + params.toString();
   });
 
-  // 復元
+  // --- 復元 ---
   try{
     const last = localStorage.getItem('kakehashi:lastForm');
     if(last){
