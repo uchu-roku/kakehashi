@@ -85,6 +85,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 入力の復元
   const params = new URLSearchParams(location.search);
+  // 外部NDVI画像の差し替え用（森林デモ限定で使う）
+  const overlayUrlParam      = params.get('overlay_url');       // 画像直リンク（.png/.jpg）
+  const overlayBBoxParam     = params.get('overlay_bbox');      // "minLon,minLat,maxLon,maxLat"
+  const overlayOpacityParam  = params.get('overlay_opacity');   // 0〜1（例: 0.65）
+  const overlayModeParam     = params.get('overlay_mode');      // "ndvi" など（凡例切替用）
   const form = {
     industry: params.get('industry') || (JSON.parse(localStorage.getItem('kakehashi:lastForm')||'{}').industry||''),
     region  : params.get('region') || '',
@@ -287,6 +292,33 @@ document.addEventListener('DOMContentLoaded', () => {
       const res=await fetch(url,{cache:'no-store'}); if(res.ok) meta=await res.json();
     }catch(e){ console.warn('fetch demo meta failed', e); }
     meta = meta || { title:`${title}（デモ情報未設定）`, last_obs:'', tileUrl:'', center:[35,135], zoom:5, legend:[] };
+// ★ [0] 森林在庫（forestry_hokkaido_202405）だけ外部NDVIを重ねる
+    if (demoId === 'forestry_hokkaido_202405') {
+      // いただいた画像URL（Sorabatake）
+      const fallbackNdviUrl = 'https://sorabatake.jp/wp-content/uploads/2023/05/image24-1-1300x1166.png';
+    
+      // bbox は北海道ざっくり既定 → URLパラメータがあれば優先
+      let bbox = [139.0, 41.2, 147.8, 45.7]; // [minLon, minLat, maxLon, maxLat]
+      if (overlayBBoxParam) {
+        const arr = overlayBBoxParam.split(',').map(Number);
+        if (arr.length === 4 && arr.every(v => Number.isFinite(v))) bbox = arr;
+      }
+    
+      const ndviUrl  = overlayUrlParam || fallbackNdviUrl;
+      const op  = overlayOpacityParam ? Math.max(0, Math.min(1, parseFloat(overlayOpacityParam))) : 0.65;
+    
+      // 既存 overlay をこのデモに限り上書き
+      meta.overlay = { type: 'image', url: ndviUrl, bbox, opacity: op };
+    
+      // 表示をNDVIっぽく（overlay_mode=ndvi なら凡例/説明も上書き）
+      if (overlayModeParam === 'ndvi' || !meta.legend) {
+        meta.legend = [
+          { label: '低NDVI', color: '#e6f4e6' },
+          { label: '高NDVI', color: '#1f7a1f' }
+        ];
+        meta.scenario = (meta.scenario || '') + '（NDVIオーバーレイ：低→高で薄緑→濃緑）';
+      }
+    }
 
     // 地域センタリング微調整
     if(/札幌/i.test(form.region)) meta.center=[43.06,141.35];
