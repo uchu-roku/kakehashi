@@ -1,5 +1,161 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KAKEHASHI デモ | 衛星データ活用診断（入力 v1.3）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b1020; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --accent2:#a78bfa; --danger:#dc2626; --chip:#0b1326; --chipb:#2a3953; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%, rgba(167,139,250,.25), transparent),var(--bg);color:var(--text);font-family:Inter,system-ui,"Noto Sans JP",sans-serif}
+  header{padding:24px;border-bottom:1px solid #1f2937;position:sticky;top:0;background:linear-gradient(180deg,rgba(17,24,39,.9),rgba(17,24,39,.7));backdrop-filter:blur(6px);z-index:10}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px}
+  .card{background:linear-gradient(180deg,rgba(31,41,55,.75),rgba(17,24,39,.9));border:1px solid #243045;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  h1{margin:0 0 8px;font-size:28px}
+  p.lead{margin:0 0 18px;color:var(--muted);line-height:1.7}
+  label{display:block;margin:16px 0 8px;font-weight:600;color:#cbd5e1}
+  select,textarea,input[type="text"]{width:100%;background:#0f172a;color:var(--text);border:1px solid #243045;border-radius:12px;padding:12px 14px;outline:none}
+  textarea{min-height:120px;resize:vertical}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip input{display:none}
+  .chip label{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--chipb);background:var(--chip);cursor:pointer;color:#cbd5e1;font-size:14px}
+  .chip input:checked+label{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.3) inset;color:#e5e7eb}
+  .actions{display:flex;gap:12px;margin-top:20px}
+  .btn{appearance:none;border:none;padding:12px 18px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s}
+  .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#0b1020}
+  .btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
+  .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid #2a3953}
+  .note{font-size:12px;color:#9ca3af;margin-top:6px}
+  .hint{margin:8px 0;color:#9ca3af;font-size:12px}
+  .counter{font-size:12px;color:#9ca3af;text-align:right;margin-top:4px}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .is-invalid{border-color:var(--danger);box-shadow:0 0 0 2px rgba(220,38,38,.2) inset}
+  .stepper{display:flex;gap:8px;font-size:12px;color:#9ca3af;align-items:center}
+  .stepper .dot{width:8px;height:8px;border-radius:999px;background:#334155}
+  .stepper .dot.active{background:var(--accent)}
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid #2a3953;background:#0b1326;border-radius:999px;padding:4px 10px;font-size:12px;color:#cbd5e1}
+  /* ウィザード */
+  .wizard{margin-top:16px;border:1px dashed #2a3953;border-radius:12px;padding:14px;background:#0b1326}
+  .wizard h3{margin:0 0 8px;font-size:16px}
+  .wiz-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .wiz-col{display:flex;flex-wrap:wrap;gap:6px}
+  .wiz-tag{font-size:12px;border:1px solid #243045;background:#0f172a;border-radius:999px;padding:6px 10px;cursor:pointer}
+  .wiz-tag.active{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.3) inset}
+  .sugg{border:1px solid #2a3953;background:#0b1326;border-radius:10px;padding:10px;margin-top:10px}
+  .sugg h4{margin:0 0 4px;font-size:14px}
+  .sugg p{margin:0;color:#9ca3af;font-size:12px}
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="brand" style="font-weight:800;letter-spacing:.3px;">KAKEHASHI デモ</div>
+      <div class="stepper" aria-label="進行状況">
+        <span class="dot active"></span><span>① 課題入力</span><span style="opacity:.5;">→</span>
+        <span class="dot"></span><span style="opacity:.7;">② 提案確認</span><span style="opacity:.5;">→</span>
+        <span class="dot"></span><span style="opacity:.7;">③ デモを見る</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="card">
+      <h1>衛星データ活用診断</h1>
+      <p class="lead">専門用語は不要です。いつもの業務のことばで入力してください。</p>
+
+      <form id="diagForm" novalidate>
+        <div class="row">
+          <div>
+            <label for="industry">業界カテゴリ</label>
+            <select id="industry" required aria-describedby="industryHelp">
+              <option value="">選択してください</option>
+              <option value="インフラ点検/建設">インフラ点検/建設</option>
+              <option value="エネルギー/排出監視">エネルギー/排出監視</option>
+              <option value="林業">林業</option>
+              <option value="水環境/養殖">水環境/養殖</option>
+              <option value="災害/保険">災害/保険</option>
+              <option value="農業">農業</option>
+            </select>
+            <div class="note" id="industryHelp">自然文・ウィザードから自動推定します。誤っていたら上書きしてください。</div>
+            <div id="nlcHint" class="hint" aria-live="polite"></div>
+            <div id="segHint" class="hint"></div>
+          </div>
+          <div>
+            <label for="region">対象地域（任意）</label>
+            <input id="region" type="text" placeholder="例：札幌市／北海道／福岡市など（任意）">
+            <div class="note">地域は地図のセンタリング・地域優先表示に使います</div>
+          </div>
+        </div>
+
+        <label for="problem">現場の課題（自然文）</label>
+        <textarea id="problem" placeholder="例）豪雨のとき、どの道路が浸水しやすいか事前に把握したい。" maxlength="400" aria-describedby="problemHelp"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+          <button type="button" class="btn btn-ghost" id="insertExample">例文を挿入</button>
+          <div class="counter" id="charCounter" aria-live="polite" style="margin-left:auto;">0 / 400</div>
+        </div>
+        <div class="note" id="problemHelp">例：洪水・赤潮・メタン・森林・圃場 などの言葉が入ると精度が上がります。</div>
+
+        <!-- 🧭 ウィザード（業界→困りごと→期待成果） -->
+        <div class="wizard" id="wizard">
+          <h3>かんたんガイド（質問に答えるだけ）</h3>
+          <div class="wiz-row">
+            <div>
+              <div style="font-size:12px;color:#9ca3af;margin-bottom:6px;">1. あなたの業界</div>
+              <div class="wiz-col" id="wizInd"></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9ca3af;margin-bottom:6px;">2. 困りごと</div>
+              <div class="wiz-col" id="wizProb"></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9ca3af;margin-bottom:6px;">3. 期待する成果</div>
+              <div class="wiz-col" id="wizKpi"></div>
+            </div>
+          </div>
+          <div class="sugg" id="wizSugg" style="display:none"></div>
+        </div>
+
+        <label>重視する目的/KPI（複数選択可）</label>
+        <div class="chips" role="group" aria-label="重視KPI">
+          <div class="chip"><input id="kpi_0" type="checkbox" name="kpi" value="コスト削減"><label for="kpi_0">コスト削減</label></div>
+          <div class="chip"><input id="kpi_1" type="checkbox" name="kpi" value="進捗可視化"><label for="kpi_1">進捗可視化</label></div>
+          <div class="chip"><input id="kpi_2" type="checkbox" name="kpi" value="品質向上"><label for="kpi_2">品質向上</label></div>
+          <div class="chip"><input id="kpi_3" type="checkbox" name="kpi" value="安全/リスク低減"><label for="kpi_3">安全/リスク低減</label></div>
+          <div class="chip"><input id="kpi_4" type="checkbox" name="kpi" value="CO2/ESG"><label for="kpi_4">CO2/ESG</label></div>
+          <div class="chip"><input id="kpi_5" type="checkbox" name="kpi" value="労務省力化"><label for="kpi_5">労務省力化</label></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">診断する →</button>
+          <button class="btn btn-ghost" type="reset">リセット</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer style="color:#6b7280;text-align:center;font-size:12px;padding:24px;">© 2025 KAKEHASHI Project – Prototype (v1.3)</footer>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // === 既存UI参照（見つからない場合は安全に抜ける） ===
+  const formEl   = document.getElementById('diagForm');
+  const problem  = document.getElementById('problem');
+  const industry = document.getElementById('industry');
+  const region   = document.getElementById('region');
+  const nlcHint  = document.getElementById('nlcHint');
+  const segHint  = document.getElementById('segHint');
+  const charCounter  = document.getElementById('charCounter');
+  const insertExample= document.getElementById('insertExample');
+
+  // UIの基盤が無ければ終了（白画面回避）
+  if(!formEl || !industry){
+    console.warn('[KAKEHASHI] base form elements not found. Skip init.');
+    return;
+  }
+
   // ＝＝＝ 追加：最小入力ガイド（業界 or 自然文のどちらか1つでOK） ＝＝＝
   (function injectMinGuide(){
     const card = document.querySelector('.card');
@@ -15,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(h1) h1.insertAdjacentElement('afterend', note);
   })();
 
-  // === 既存のNLC/SEGルール（必要最小だけ抽出・流用） ===
+  // === NLC/SEG ルール ===
   const NLC_RULES = {
     "インフラ点検/建設": ["橋梁","舗装","法面","変位","沈下","施工","出来形","BIM","CIM","インフラ","InSAR","地盤"],
     "エネルギー/排出監視": ["メタン","フレア","排出","GHG","ESG","二酸化炭素","CO2","オイル","ガス","リーク"],
@@ -35,11 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return best.score>0 ? {label:best.label, confidence:conf} : null;
   }
   const KEYWORD_TO_SEG = [
-    {rx:/洪水|浸水|冠水|氾濫|内水|外水/, seg:"SEG_FLOOD", label:"洪水・浸水"},
-    {rx:/赤潮|クロロフィル|藻類|HAB/, seg:"SEG_REDTIDE", label:"赤潮"},
-    {rx:/メタン|フレア|排出|CH4|リーク/, seg:"SEG_METHANE", label:"メタン監視"},
-    {rx:/森林|材積|路網|間伐|皆伐|在庫/, seg:"SEG_FORESTRY_SME", label:"森林在庫"},
-    {rx:/圃場|生育|NDVI|作付|収量/, seg:"SEG_AGRI_PROD", label:"農業NDVI"}
+    {rx:/洪水|浸水|冠水|氾濫|内水|外水/, seg:"SEG_FLOOD"},
+    {rx:/赤潮|クロロフィル|藻類|HAB/, seg:"SEG_REDTIDE"},
+    {rx:/メタン|フレア|排出|CH4|リーク/, seg:"SEG_METHANE"},
+    {rx:/森林|材積|路網|間伐|皆伐|在庫/, seg:"SEG_FORESTRY_SME"},
+    {rx:/圃場|生育|NDVI|作付|収量/, seg:"SEG_AGRI_PROD"}
   ];
   function segsFromText(text){
     const hits = new Set(); const t = text || "";
@@ -54,50 +210,34 @@ document.addEventListener('DOMContentLoaded', () => {
     "災害/保険": { base: ["SEG_INSURANCE","SEG_EMERGENCY","SEG_FLOOD"] },
     "農業": { base: ["SEG_AGRI_PROD","SEG_AGRI_LOCALGOV","SEG_LOCALGOV","SEG_JA"] }
   };
-  function deriveSegs(industry, kpis){
-    const base = (SEG_RULES[industry]?.base)||[];
+  function deriveSegs(ind, kpis){
+    const base = (SEG_RULES[ind]?.base)||[];
     const bonus = [];
     if(kpis.includes("CO2/ESG")) bonus.push("SEG_REGULATOR");
     if(kpis.includes("安全/リスク低減")) bonus.push("SEG_EMERGENCY","SEG_INSURANCE");
     return Array.from(new Set([...base, ...bonus]));
   }
 
-  // === 既存UI参照 ===
-  const problem = document.getElementById('problem');
-  const industry = document.getElementById('industry');
-  const region = document.getElementById('region');
-  const nlcHint = document.getElementById('nlcHint');
-  const segHint = document.getElementById('segHint');
-  const charCounter = document.getElementById('charCounter');
-  const insertExample = document.getElementById('insertExample');
-
-  // 要素が取れない場合は何もしない（安全化）
-  if(!document.getElementById('diagForm') || !industry) return;
-
-  // ＝＝＝ 新：推定チップUI（クリックで採用/解除できる） ＝＝＝
+  // ＝＝＝ 推定チップUI ＝＝＝
   const hintBar = document.createElement('div');
   hintBar.className = 'chips';
   hintBar.style.margin = '8px 0';
-  if(problem && problem.parentElement){
-    problem.parentElement.insertAdjacentElement('afterend', hintBar);
-  }
+  // ★★ ここが落ちていた：optional chainingで安全化
+  problem?.parentElement?.insertAdjacentElement('afterend', hintBar);
 
   function renderHints(text){
     hintBar.innerHTML = '';
-    // 業界推定
     const r = classifyIndustry(text);
-    if(nlcHint){
-      if(r){ nlcHint.textContent = `推定：${r.label}（信頼度 ${r.confidence.toFixed(2)}）`; }
-      else { nlcHint.textContent = ""; }
-    }
     if(r){
+      nlcHint && (nlcHint.textContent = `推定：${r.label}（信頼度 ${r.confidence.toFixed(2)}）`);
       const c = document.createElement('div'); c.className='chip';
       c.innerHTML = `<label>推定業界：${r.label}</label>`;
       c.style.cursor='pointer';
       c.onclick = ()=>{ industry.value = (industry.value===r.label ? "" : r.label); };
       hintBar.appendChild(c);
+    }else{
+      nlcHint && (nlcHint.textContent = "");
     }
-    // SEG推定
     const segs = segsFromText(text);
     if(segs.length){
       const c = document.createElement('div'); c.className='chip';
@@ -107,65 +247,64 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 入力イベント
-  if(problem){
-    problem.addEventListener('input', ()=>{
-      renderHints(problem.value);
-      if(charCounter) charCounter.textContent = `${problem.value.length} / ${problem.maxLength}`;
-    });
-  }
-  if(insertExample && problem){
-    insertExample.addEventListener('click', ()=>{
-      problem.value = "豪雨のとき、どの道路が浸水しやすいか事前に把握したい。";
-      problem.dispatchEvent(new Event('input'));
-    });
-  }
+  problem?.addEventListener('input', ()=>{
+    renderHints(problem.value);
+    charCounter && (charCounter.textContent = `${problem.value.length} / ${problem.maxLength}`);
+  });
+  insertExample?.addEventListener('click', ()=>{
+    if(!problem) return;
+    problem.value = "豪雨のとき、どの道路が浸水しやすいか事前に把握したい。";
+    problem.dispatchEvent(new Event('input'));
+  });
 
-  // ＝＝＝ 新：最小入力バリデーション（業界 or 自然文 のいずれか1つでOK） ＝＝＝
-  const formEl = document.getElementById('diagForm');
+  // ＝＝＝ 最小入力バリデーション（業界 or 自然文 のどちらか1つ） ＝＝＝
   formEl.addEventListener('submit', (e)=>{
     e.preventDefault();
     const kpis = Array.from(document.querySelectorAll('input[name="kpi"]:checked')).map(i=>i.value);
     const hasIndustry = !!industry.value;
-    const hasProblem  = !!(problem && problem.value.trim());
+    const hasProblem  = !!(problem?.value.trim());
 
-    // 「業界必須」を廃止 → 最小入力へ
     if(!hasIndustry && !hasProblem){
-      if(problem) problem.classList.add('is-invalid');
+      problem && problem.classList.add('is-invalid');
       industry.classList.add('is-invalid');
       alert("最小入力：業界 か 課題（自然文）のどちらか1つを入力してください。");
       return;
     }else{
-      if(problem) problem.classList.remove('is-invalid');
+      problem && problem.classList.remove('is-invalid');
       industry.classList.remove('is-invalid');
     }
 
-    // SEG導出（テキスト由来＋業界/KPI由来）
     const segBase = deriveSegs(industry.value, kpis);
-    const segFromText = segsFromText(problem ? problem.value : "");
+    const segFromText = segsFromText(problem?.value || "");
     const segsAll = Array.from(new Set([...segBase, ...segFromText]));
 
-    // 保存＆遷移
-    const formPayload = { industry: industry.value, region: region ? region.value.trim() : "", problem: problem ? problem.value.trim() : "", kpis, segs: segsAll };
-    localStorage.setItem('kakehashi:lastForm', JSON.stringify(formPayload));
-    localStorage.setItem('kakehashi:lastSegs', JSON.stringify(formPayload.segs||[]));
-    const params = new URLSearchParams({ industry:formPayload.industry, region:formPayload.region, problem:formPayload.problem, kpi:kpis.join(',') });
+    const payload = {
+      industry: industry.value,
+      region  : region?.value.trim() || "",
+      problem : problem?.value.trim() || "",
+      kpis, segs: segsAll
+    };
+    localStorage.setItem('kakehashi:lastForm', JSON.stringify(payload));
+    localStorage.setItem('kakehashi:lastSegs', JSON.stringify(payload.segs||[]));
+    const params = new URLSearchParams({ industry:payload.industry, region:payload.region, problem:payload.problem, kpi:kpis.join(',') });
     location.href = 'results.html?' + params.toString();
   });
 
   // 復元
-  (()=>{
+  try{
     const last = localStorage.getItem('kakehashi:lastForm');
-    if(!last) return;
-    try{
+    if(last){
       const v = JSON.parse(last);
       if(v.industry) industry.value = v.industry;
-      if(region && v.region)   region.value   = v.region;
+      if(region && v.region) region.value = v.region;
       if(problem && v.problem){ problem.value = v.problem; problem.dispatchEvent(new Event('input')); }
       if(Array.isArray(v.kpis)) v.kpis.forEach(k=>{
         const el = Array.from(document.querySelectorAll('input[name="kpi"]')).find(n=>n.value===k);
         if(el) el.checked = true;
       });
-    }catch(e){}
-  })();
+    }
+  }catch(e){}
 });
 </script>
+</body>
+</html>
