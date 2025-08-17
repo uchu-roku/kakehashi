@@ -1,0 +1,22 @@
+[
+  {
+    "segment_id": "SEG_FLOOD",
+    "demo_id": "flood_fukuoka_20240712"
+  },
+  {
+    "segment_id": "SEG_AGRI_PROD",
+    "demo_id": "agri_ndvi_hokkaido_202406"
+  },
+  {
+    "segment_id": "SEG_FORESTRY_SME",
+    "demo_id": "forestry_hokkaido_202405"
+  },
+  {
+    "segment_id": "SEG_METHANE",
+    "demo_id": "methane_toc_202501"
+  },
+  {
+    "segment_id": "SEG_REDTIDE",
+    "demo_id": "redtide_seto_202408"
+  }
+]

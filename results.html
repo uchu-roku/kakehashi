@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KAKEHASHI デモ | 診断結果 v1.3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  :root{--bg:#0b1020;--text:#e5e7eb;--muted:#9ca3af;--accent:#22d3ee;--accent2:#a78bfa}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%, rgba(167,139,250,.25), transparent),var(--bg);color:var(--text);font-family:Inter,system-ui,"Noto Sans JP",sans-serif}
+  header{padding:24px;border-bottom:1px solid #1f2937;position:sticky;top:0;background:linear-gradient(180deg,rgba(17,24,39,.9),rgba(17,24,39,.7));backdrop-filter:blur(6px);z-index:10}
+  .wrap{max-width:1200px;margin:0 auto;padding:24px}
+  h1{margin:0 0 8px;font-size:26px}
+  .lead{margin:0 0 18px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font-size:11px;color:#cbd5e1;border:1px solid #2a3953;background:#0b1326;padding:4px 8px;border-radius:999px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .card{background:linear-gradient(180deg,rgba(31,41,55,.75),rgba(17,24,39,.9));border:1px solid #243045;border-radius:16px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .card h3{margin:0 0 6px;font-size:18px}
+  .meta{font-size:12px;color:#9ca3af;margin:4px 0 10px}
+  .btn{appearance:none;border:none;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;transition:.2s}
+  .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#0b1020}
+  .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid #2a3953}
+  .mapWrap{margin-top:24px}
+  #map{width:100%;height:480px;border-radius:12px;border:1px solid #243045;position:relative;overflow:hidden}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#cbd5e1}
+  .legend .item{display:flex;align-items:center;gap:6px;padding:4px 8px;background:#0b1326;border:1px solid #2a3953;border-radius:999px}
+  .legend .sw{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;border:1px solid #334155;font-size:12px}
+  .score{font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .empty{color:#9ca3af;font-size:14px;padding:24px;border:1px dashed #2a3953;border-radius:12px}
+  a,a:visited{color:#cbd5e1}
+  .scenario{margin-top:10px;color:#cbd5e1;font-size:14px;line-height:1.7}
+  .demoActions{margin-top:12px;display:flex;gap:10px;flex-wrap:wrap}
+  /* AI解析中オーバーレイ */
+  .overlay{position:absolute;inset:0;background:rgba(10,16,30,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;color:#e5e7eb;font-weight:600}
+  .spinner{width:56px;height:56px;border-radius:999px;border:4px solid rgba(255,255,255,.25);border-top-color:#22d3ee;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .faq{margin-top:28px}
+  .faq h3{margin:0 0 8px;font-size:18px}
+  .faq .q{margin:10px 0;font-weight:600}
+  .faq .a{margin:2px 0 12px;color:#cbd5e1}
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="brand" style="font-weight:800;letter-spacing:.3px;">KAKEHASHI デモ</div>
+      <div><a href="index.html" style="font-size:12px;color:#9ca3af">← もどる</a></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <h1>診断結果</h1>
+        <div class="lead" id="leadText"></div>
+      </div>
+      <div class="chips" id="formChips" aria-label="入力条件"></div>
+    </div>
+
+    <section class="grid" id="resultsGrid" aria-live="polite"></section>
+
+    <section class="mapWrap" id="demoSection" style="display:none;">
+      <h2 style="font-size:20px;margin:24px 0 8px;">デモビューワ</h2>
+      <div class="meta" id="demoMeta"></div>
+      <div id="map" role="figure" aria-label="デモマップ">
+        <div class="overlay" id="aiOverlay"><div class="spinner"></div><div style="margin-left:12px">AIが解析しています…</div></div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="scenario" id="scenario"></div>
+      <div class="demoActions" id="demoActions"></div>
+      <!-- 顧客向けFAQ -->
+      <div class="faq" id="faq">
+        <h3>よくある質問</h3>
+        <div class="q">Q. 費用はどのくらいですか？</div>
+        <div class="a">A. まずはサンプルの範囲で検証（無料/低額）→本番運用は頻度・範囲により変動します。目安は月数万円〜です。</div>
+        <div class="q">Q. 導入までどれくらいかかりますか？</div>
+        <div class="a">A. サンプル検証は最短数日。本番はデータ連携の有無により2〜6週間が一般的です。</div>
+        <div class="q">Q. 専門知識がなくても運用できますか？</div>
+        <div class="a">A. はい。担当者向けに操作ガイドと定期レポート雛形をご用意します。</div>
+      </div>
+    </section>
+  </main>
+
+  <footer style="text-align:center;color:#6b7280;font-size:12px;padding:24px;">© 2025 KAKEHASHI Project – Prototype (v1.3)</footer>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const form = {
+      industry: params.get('industry') || (JSON.parse(localStorage.getItem('kakehashi:lastForm')||'{}').industry||''),
+      region: params.get('region') || '',
+      problem: params.get('problem') || '',
+      kpis: (params.get('kpi')||'').split(',').filter(Boolean)
+    };
+    const segs = JSON.parse(localStorage.getItem('kakehashi:lastSegs')||'[]');
+    const forceDemoId = params.get('demo_id');
+
+    const DEMO_BY_SEG = {
+      "SEG_FLOOD": "flood_fukuoka_20240712",
+      "SEG_FORESTRY_SME": "forestry_hokkaido_202405",
+      "SEG_REDTIDE": "redtide_seto_202408",
+      "SEG_AGRI_PROD": "agri_ndvi_hokkaido_202406",
+      "SEG_METHANE": "methane_toc_202501"
+    };
+
+    function regionMatchScore(solRegionHint, userRegion){
+      if(!solRegionHint || !userRegion) return 0;
+      const t = userRegion.toLowerCase();
+      return solRegionHint.some(h => t.includes(h)) ? 1 : 0;
+    }
+    function tokenizeJa(s){ return (s||"").toLowerCase().split(/[^\p{Letter}\p{Number}]+/u).filter(Boolean); }
+    function jaccard(a,b){ const A=new Set(a),B=new Set(b); const inter=[...A].filter(x=>B.has(x)).length; const uni=new Set([...A,...B]).size; return uni?(inter/uni):0; }
+
+    window.DB = window.DB || {};
+    window.DB.solutions = window.DB.solutions || [
+      { sol_id:"sol_flood_01", title:"洪水・浸水深推定", provider:"KAKEHASHI Demo", service_name:"Flood Insight", use_case_category:"災害", description:"豪雨時の浸水深を把握して優先点検ルートを策定。", linked_segments:"SEG_FLOOD;SEG_EMERGENCY;SEG_INSURANCE", region_hint:["福岡","九州"], default_demo_id:"flood_fukuoka_20240712", data_sources:"SAR/DEM", delivery_access:"WebUI/API" },
+      { sol_id:"sol_agri_01", title:"NDVI圃場モニタ", provider:"KAKEHASHI Demo", service_name:"Agri NDVI", use_case_category:"農業", description:"生育ムラを見える化し、追肥判断を支援。", linked_segments:"SEG_AGRI_PROD", region_hint:["北海道","空知","札幌"], default_demo_id:"agri_ndvi_hokkaido_202406", data_sources:"Sentinel-2", delivery_access:"WebUI" },
+      { sol_id:"sol_forest_01", title:"森林在庫（齢級推定）", provider:"KAKEHASHI Demo", service_name:"Forest Stock", use_case_category:"林業", description:"齢級分布から施業対象区画を抽出。", linked_segments:"SEG_FORESTRY_SME;SEG_FORESTRY_PUBLIC", region_hint:["北海道","道央"], default_demo_id:"forestry_hokkaido_202405", data_sources:"SAR/光学/DEM", delivery_access:"WebUI" },
+      { sol_id:"sol_methane_01", title:"メタン/フレア監視", provider:"KAKEHASHI Demo", service_name:"Methane TOC", use_case_category:"エネルギー", description:"CH4ホットスポットを継続監視し、ESG報告に活用。", linked_segments:"SEG_METHANE;SEG_REGULATOR;SEG_OILGAS", region_hint:["湾岸","プラント"], default_demo_id:"methane_toc_202501", data_sources:"SWIR/TIR", delivery_access:"WebUI/API" },
+      { sol_id:"sol_redtide_01", title:"赤潮・クロロフィル指標", provider:"KAKEHASHI Demo", service_name:"HAB Monitor", use_case_category:"水環境", description:"クロロフィル濃度の高い海域を広域監視。", linked_segments:"SEG_REDTIDE;SEG_AQUA_SME", region_hint:["瀬戸内","内海"], default_demo_id:"redtide_seto_202408", data_sources:"光学", delivery_access:"WebUI" }
+    ];
+
+    function scoreSolution(sol, form){
+      let score=0; const reasons=[];
+      if(sol.use_case_category && sol.use_case_category.includes((form.industry||'').split('/')[0])){ score+=2; reasons.push('業界一致'); }
+      const kpiHits = form.kpis.filter(k => (sol.title+sol.description).includes(k)).length;
+      if(kpiHits>0){ score += kpiHits; reasons.push(`KPI一致×${kpiHits}`); }
+      const linked = (sol.linked_segments||"").split(';').filter(Boolean);
+      const segHit = linked.filter(s=>segs.includes(s)).length;
+      if(segHit>0){ score += segHit*3; reasons.push(`SEG一致×${segHit}`); }
+      const sim = jaccard(tokenizeJa(form.problem), tokenizeJa(`${sol.title} ${sol.description} ${sol.use_case_category}`));
+      const simPts = Math.round(sim*3); score += simPts; if(simPts>0) reasons.push(`文章類似${(sim*100).toFixed(0)}%`);
+      const regPts = regionMatchScore(sol.region_hint||[], form.region);
+      if(regPts>0){ score += regPts; reasons.push('地域近接'); }
+      return {score, reasons};
+    }
+
+    const grid = document.getElementById('resultsGrid');
+    const chipsEl = document.getElementById('formChips');
+    const leadText = document.getElementById('leadText');
+
+    function renderFormChips(){
+      chipsEl.innerHTML = "";
+      if(form.industry){ const d=document.createElement('div'); d.className='chip'; d.textContent=`業界: ${form.industry}`; chipsEl.appendChild(d); }
+      if(form.region){ const d=document.createElement('div'); d.className='chip'; d.textContent=`地域: ${form.region}`; chipsEl.appendChild(d); }
+      if(form.kpis.length){ const d=document.createElement('div'); d.className='chip'; d.textContent=`KPI: ${form.kpis.join(' / ')}`; chipsEl.appendChild(d); }
+      if(segs.length){ const d=document.createElement('div'); d.className='chip'; d.textContent=`SEG: ${segs.join(', ')}`; chipsEl.appendChild(d); }
+    }
+
+    function renderResults(){
+      const scored = (window.DB.solutions||[]).map(sol=>{
+        const {score,reasons} = scoreSolution(sol, form);
+        return {...sol,_score:score,_reasons:reasons};
+      }).sort((a,b)=>b._score-a._score);
+
+      if(scored.length){
+        leadText.textContent = `入力内容に基づき ${scored.length} 件の候補を見つけました。合致度の高い順に表示しています。`;
+        scored.slice(0,8).forEach(sol=>{
+          const card=document.createElement('div'); card.className='card';
+          const h=document.createElement('h3'); h.innerHTML=`<span class="score">[${sol._score}]</span> ${sol.title}`;
+          const meta=document.createElement('div'); meta.className='meta'; meta.textContent=`${sol.provider} / ${sol.service_name} ｜ カテゴリ: ${sol.use_case_category}`;
+          const p=document.createElement('p'); p.textContent=sol.description;
+
+          const chips=document.createElement('div'); chips.className='chips';
+          sol._reasons.forEach(r=>{ const c=document.createElement('div'); c.className='chip'; c.textContent=r; chips.appendChild(c); });
+
+          const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px'; actions.style.marginTop='10px';
+          const btnDemo=document.createElement('button'); btnDemo.className='btn btn-primary'; btnDemo.textContent='デモを見る';
+          btnDemo.onclick=()=>openDemo(sol.default_demo_id, sol.title, true);
+          const btnDetail=document.createElement('button'); btnDetail.className='btn btn-ghost'; btnDetail.textContent='詳細（シナリオ）';
+          btnDetail.onclick=()=>openDemo(sol.default_demo_id, sol.title, true);
+          actions.appendChild(btnDemo); actions.appendChild(btnDetail);
+
+          card.appendChild(h); card.appendChild(meta); card.appendChild(p); card.appendChild(chips); card.appendChild(actions);
+          grid.appendChild(card);
+        });
+      }else{
+        const demoId = segs.map(s=>DEMO_BY_SEG[s]).find(Boolean) || forceDemoId || null;
+        leadText.textContent = demoId ? 'カタログ提案は見つかりませんでしたが、関連デモを表示します。' : '該当するソリューションが見つかりませんでした。';
+        if(demoId){
+          const info=document.createElement('div'); info.className='empty';
+          info.textContent='関連デモを下のビューワに表示しました。';
+          grid.appendChild(info);
+          openDemo(demoId, '関連デモ', true);
+        }else{
+          const empty=document.createElement('div'); empty.className='empty'; empty.textContent='該当するソリューションが見つかりませんでした。';
+          grid.appendChild(empty);
+        }
+      }
+      if(forceDemoId){ openDemo(forceDemoId, 'プレビュー', true); }
+    }
+
+    renderFormChips(); renderResults();
+
+    // 地図
+    let map, overlay;
+    const overlayEl = document.getElementById('aiOverlay');
+
+    async function openDemo(demoId, title, scrollToScenario=false){
+      const url = `public/demos/${demoId}/index.json`;
+      overlayEl.style.display='flex';
+      let meta=null;
+      try{ const res=await fetch(url,{cache:'no-store'}); if(res.ok) meta=await res.json(); }catch(e){}
+      meta = meta || { title:`${title}（デモ情報未設定）`, last_obs:'', tileUrl:'', center:[35,135], zoom:5, legend:[] };
+
+      // 地域センタリング
+      if(/札幌/i.test(form.region)) meta.center=[43.06,141.35];
+      if(/北海道/i.test(form.region)) meta.center=[43.22,142.86];
+      if(/福岡/i.test(form.region)) meta.center=[33.59,130.40];
+
+      document.getElementById('demoSection').style.display='';
+      document.getElementById('demoMeta').textContent =
+        `${meta.title}｜最終観測: ${meta.last_obs||'—'}｜提供: ${meta.provider||'—'}｜データ源: ${meta.data_source||meta.data_sources||'—'}`;
+
+      if(!map){
+        map = L.map('map');
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+      }
+      map.setView(meta.center, meta.zoom||12);
+
+      if(overlay){ overlay.remove(); overlay=null; }
+      if(meta.tileUrl){ overlay = L.tileLayer(meta.tileUrl,{maxZoom:19,opacity:.85}).addTo(map); }
+
+      // 凡例（色＋アイコン）
+      const legend = document.getElementById('legend'); legend.innerHTML='';
+      (meta.legend||[]).forEach(it=>{
+        const d=document.createElement('div'); d.className='item';
+        const sw=document.createElement('span'); sw.className='sw';
+        sw.style.background = it.color || '#334155';
+        sw.textContent = it.icon || ''; // 例：🌊, 🌿 など
+        const t=document.createElement('span'); t.textContent=it.label||''; d.appendChild(sw); d.appendChild(t);
+        legend.appendChild(d);
+      });
+
+      // シナリオ＋CTA
+      document.getElementById('scenario').textContent = meta.scenario || meta.scenario_text || 'このデモの活用ストーリーは準備中です。';
+      const actions = document.getElementById('demoActions'); actions.innerHTML='';
+
+      const btnLocal=document.createElement('button'); btnLocal.className='btn btn-primary';
+      btnLocal.textContent='自分の地域でも試せますか？';
+      btnLocal.onclick=()=> window.open((meta.cta?.href || 'mailto:contact@example.com?subject=デモ相談&body=地域: '+(form.region||'')), '_blank','noopener');
+      actions.appendChild(btnLocal);
+
+      if(meta.cta && meta.cta.href){
+        const btn=document.createElement('a'); btn.className='btn btn-ghost'; btn.textContent=meta.cta.text||'相談する';
+        btn.href=meta.cta.href; btn.target='_blank'; btn.rel='noopener';
+        actions.appendChild(btn);
+      }
+
+      overlayEl.style.display='none';
+      if(scrollToScenario) document.getElementById('scenario').scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+  </script>
+</body>
+</html>
