@@ -26,7 +26,7 @@
   .result-card .btn{appearance:none;border:none;padding:8px 12px;border-radius:10px;font-weight:700;cursor:pointer}
   .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#0b1020}
   .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid #2a3953}
-  #map{width:100%;height:420px;border-radius:12px;border:1px solid #243045}
+  #map{width:100%;height:420px;border-radius:12px;border:1px solid #243045;}
   #legend .item{display:flex;align-items:center;gap:8px;font-size:12px;margin:6px 0}
   #legend .sw{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;border:1px solid #334155}
   #aiOverlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.35);align-items:center;justify-content:center;border-radius:12px}
@@ -65,9 +65,8 @@
     </div>
     
     <!-- ★ここに追加 -->
-    <div class="note" style="font-size:11px;color:#9ca3af;margin-top:6px">
-      出典画像: <a href="https://sorabatake.jp/32461/" target="_blank" rel="noopener">SORABATAKE</a>
-    </div>
+    <div id="creditNote" class="note" style="display:none;font-size:11px;color:#9ca3af;margin-top:6px"></div>
+    <div id="legend" style="margin-top:10px"></div>
     
     <div id="legend" style="margin-top:10px"></div>
     <p id="scenario" style="margin-top:10px;color:#cbd5e1;font-size:14px">ここにデモの活用シナリオが表示されます。</p>
@@ -82,6 +81,16 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // デモごとの出典情報（必要に応じて増やせます）
+  const DEMO_CREDIT = {
+    // [0] 森林在庫（齢級推定）
+    "forestry_hokkaido_202405": {
+      label: "SORABATAKE",
+      href: "https://sorabatake.jp/32461/"
+    },
+    // 例：洪水デモに何か出典を付けたい場合
+    // "flood_fukuoka_20240712": { label: "出典サイト名", href: "https://example.com" },
+  };
   const chipsEl   = document.getElementById('formChips');
   const grid      = document.getElementById('resultsGrid');
   const leadText  = document.getElementById('leadText');
@@ -335,6 +344,32 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('demoMeta').textContent =
       `${meta.title}｜最終観測: ${meta.last_obs||'—'}｜提供: ${meta.provider||'—'}｜データ源: ${meta.data_source||meta.data_sources||'—'}`;
 
+    // 出典の動的切り替え
+    const creditEl = document.getElementById('creditNote');
+    (function setCredit(){
+      // まず非表示
+      if (creditEl) {
+        creditEl.style.display = 'none';
+        creditEl.innerHTML = '';
+      }
+      // 1) 明示的にオーバーレイURLが来ているとき（クエリで overlay_url 指定）→ 出典が決められるならここでセット
+      if (demoId === 'forestry_hokkaido_202405') {
+        // 森林デモだけSorabatakeを既定に
+        const credit = DEMO_CREDIT[demoId];
+        if (credit && creditEl) {
+          creditEl.innerHTML = `出典画像: <a href="${credit.href}" target="_blank" rel="noopener">${credit.label}</a>`;
+          creditEl.style.display = 'block';
+        }
+      } else {
+        // 2) その他のデモは、登録があれば出す
+        const credit = DEMO_CREDIT[demoId];
+        if (credit && creditEl) {
+          creditEl.innerHTML = `出典: <a href="${credit.href}" target="_blank" rel="noopener">${credit.label}</a>`;
+          creditEl.style.display = 'block';
+        }
+      }
+    })();
+    
     ensureMap(meta.center, meta.zoom||12);
 
     // オーバーレイをクリア
