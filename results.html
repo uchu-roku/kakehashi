@@ -1,3 +1,31 @@
+<main class="wrap">
+  <p class="lead" id="leadText">あなたの入力に基づき、関連するソリューション候補を提示します。</p>
+
+  <div class="chips" id="formChips"></div>
+
+  <div class="grid">
+    <!-- 左：候補一覧 -->
+    <section class="card">
+      <h2 style="margin:0 0 6px;font-size:18px">提案一覧</h2>
+      <div id="resultsGrid"></div>
+    </section>
+
+    <!-- 右：デモビューワ（文書MVP） -->
+    <section class="card" style="position:relative">
+      <h2 style="margin:0 0 6px;font-size:18px">デモビューワ</h2>
+      <div id="demoMeta" style="font-size:12px;color:#9ca3af;margin-bottom:6px">デモ未選択</div>
+
+      <div id="docViewer" style="background:#0b1326;border:1px solid #243045;border-radius:12px;padding:14px;min-height:360px"></div>
+      <div id="creditNote" class="note" style="display:none;font-size:11px;color:#9ca3af;margin-top:6px"></div>
+
+      <div id="legend" style="margin-top:10px"></div>
+      <p id="scenario" style="margin-top:10px;color:#cbd5e1;font-size:14px">ここにデモの活用シナリオが表示されます。</p>
+      <div id="demoActions" style="display:flex;gap:8px;margin-top:6px"></div>
+    </section>
+  </div>
+</main>
+
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   // ---------- DOM ----------
@@ -9,6 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const demoMetaEl   = document.getElementById('demoMeta');
   const docEl        = document.getElementById('docViewer');
   const creditEl     = document.getElementById('creditNote');
+
+  // クリティカル要素の存在チェック（無ければ安全終了）
+  if (!docEl || !grid) {
+    console.warn('[results] 必須DOMが見つかりません。HTML側のIDを確認してください。');
+    return;
+  }
 
   // ---------- 入力の復元（URL優先 → localStorage） ----------
   const urlParams = new URLSearchParams(location.search);
@@ -64,14 +98,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const probText = form.problem || '';
     const kpis = Array.isArray(form.kpis) ? form.kpis : [];
 
-    // 1) カテゴリ一致（業界プルダウン）
     if (indCat && demo.category === indCat){ score += 3; reasons.push('業界カテゴリ一致'); }
 
-    // 2) 自然文からのカテゴリ推定一致
     const inferred = inferCatsFromProblem(probText);
     if (inferred.includes(demo.category)){ score += 2; reasons.push('自然文カテゴリ一致'); }
 
-    // 3) 文章類似（自然文 vs デモ本文）
     const demoText = [
       demo.title, demo.summary, ...(demo.bullets||[]),
       ...((demo.steps||[]).map(s => `${s.title} ${s.body_md||''}`)),
@@ -79,17 +110,15 @@ document.addEventListener('DOMContentLoaded', () => {
     ].join(' ');
     const sim = jaccard(tokenizeJa(probText), tokenizeJa(demoText));
     if (sim > 0){
-      const pts = Math.min(3, Math.round(sim*4)); // 0〜3点
+      const pts = Math.min(3, Math.round(sim*4));
       score += pts;
       if (pts>0) reasons.push(`文章類似 ${(sim*100|0)}%`);
     }
 
-    // 4) KPI一致
     const demoKpis = new Set(demo.kpis||[]);
     const kpiHits = kpis.filter(k => demoKpis.has(k)).length;
     if (kpiHits){ score += kpiHits*2; reasons.push(`KPI一致×${kpiHits}`); }
 
-    // 5) 地域ヒント
     if ((demo.region_hint||[]).some(h => (form.region||'').includes(h))){ score += 1; reasons.push('地域近接'); }
 
     return {score, reasons};
@@ -97,13 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---------- フィルタ ----------
   function filterDemos(all, form, {minScore=1, limit=8} = {}) {
-    // 通常のスコアリング
     let scored = all
       .map(d => ({ ...d, _rank: scoreDemo(d, form) }))
       .filter(x => x._rank.score >= minScore)
       .sort((a, b) => b._rank.score - a._rank.score);
 
-    // 0件 → 自然文カテゴリ推定でフォールバック（全件には落とさない）
     if (scored.length === 0) {
       const inferred = inferCatsFromProblem(form.problem || '');
       if (inferred.length) {
@@ -112,23 +139,23 @@ document.addEventListener('DOMContentLoaded', () => {
           .map(d => ({ ...d, _rank: { score: 1, reasons: ['簡易一致（カテゴリ推定）'] } }));
       }
     }
-    // そのまま返す（0件は0件のまま UI がメッセージ表示）
-    return scored.slice(0, limit);
+    return scored.slice(0, limit); // 0件は0件のまま
   }
 
   // ---------- 文書デモの描画 ----------
   function renderDoc(demo){
     if(!demo){
-      demoMetaEl.textContent = 'デモ未選択';
+      if (demoMetaEl) demoMetaEl.textContent = 'デモ未選択';
       docEl.innerHTML = '<div class="note">デモを選択してください。</div>';
-      creditEl.style.display='none';
-      creditEl.innerHTML='';
-      demoActionsEl.innerHTML='';
-      scenarioEl.textContent='（MVP：文章でのシナリオ記述）';
+      if (creditEl){ creditEl.style.display='none'; creditEl.innerHTML=''; }
+      if (demoActionsEl) demoActionsEl.innerHTML='';
+      if (scenarioEl) scenarioEl.textContent='（MVP：文章でのシナリオ記述）';
       return;
     }
-    demoMetaEl.textContent =
-      `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
+    if (demoMetaEl){
+      demoMetaEl.textContent =
+        `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
+    }
 
     const bullets = (demo.bullets||[]).map(x=>`<li>${esc(x)}</li>`).join('');
     const steps = (demo.steps||[]).map(st=>
@@ -144,26 +171,31 @@ document.addEventListener('DOMContentLoaded', () => {
       ${kpis?`<div style="margin-top:12px">${kpis}</div>`:''}
     `;
 
-    if(demo.credit?.href){
-      creditEl.innerHTML = `出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a>`;
-      creditEl.style.display = 'block';
-    }else{
-      creditEl.style.display = 'none';
-      creditEl.innerHTML = '';
+    if (creditEl){
+      if(demo.credit?.href){
+        creditEl.innerHTML = `出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a>`;
+        creditEl.style.display = 'block';
+      }else{
+        creditEl.style.display = 'none';
+        creditEl.innerHTML = '';
+      }
     }
 
-    demoActionsEl.innerHTML = '';
-    if(demo.cta?.href){
-      const a = document.createElement('a');
-      a.className='btn btn-primary';
-      a.href = demo.cta.href; a.target='_blank'; a.rel='noopener';
-      a.textContent = demo.cta.label || '相談する';
-      demoActionsEl.appendChild(a);
+    if (demoActionsEl){
+      demoActionsEl.innerHTML = '';
+      if(demo.cta?.href){
+        const a = document.createElement('a');
+        a.className='btn btn-primary';
+        a.href = demo.cta.href; a.target='_blank'; a.rel='noopener';
+        a.textContent = demo.cta.label || '相談する';
+        demoActionsEl.appendChild(a);
+      }
     }
-    scenarioEl.textContent = demo.scenario || '（MVP：文章でのシナリオ記述）';
+    if (scenarioEl) scenarioEl.textContent = demo.scenario || '（MVP：文章でのシナリオ記述）';
   }
 
   function renderResults(list){
+    if (!grid || !leadText) return;
     grid.innerHTML = '';
 
     if (list.length === 0){
@@ -207,19 +239,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------- 起動：JSON読込 → 抽出 → 描画 ----------
-  fetch('public/demos/demos.json', {cache:'no-store'})
-    .then(r=>r.json())
+  // GitHub Pages の相対パス問題を避けるため先頭に './' を付けています
+  fetch('./public/demos/demos.json', {cache:'no-store'})
+    .then(r=>{
+      if(!r.ok) throw new Error('demos.json fetch failed: '+r.status);
+      return r.json();
+    })
     .then(json=>{
       DEMOS = json.demos||[];
 
       // 入力チップ
-      chipsEl.innerHTML='';
-      if(form.industry){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">業界: ${esc(form.industry)}</div>`); }
-      if(form.region){   chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">地域: ${esc(form.region)}</div>`); }
-      if(form.kpis?.length){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">KPI: ${esc(form.kpis.join(' / '))}</div>`); }
-      if(form.problem){  chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">自然文あり</div>`); }
+      if (chipsEl){
+        chipsEl.innerHTML='';
+        if(form.industry){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">業界: ${esc(form.industry)}</div>`); }
+        if(form.region){   chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">地域: ${esc(form.region)}</div>`); }
+        if(form.kpis?.length){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">KPI: ${esc(form.kpis.join(' / '))}</div>`); }
+        if(form.problem){  chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">自然文あり</div>`); }
+      }
 
-      // 入力シグナル（どれか入っていれば true）
+      // 入力シグナル
       const hasSignal =
         (form.industry && form.industry.trim()) ||
         (form.problem  && form.problem.trim())  ||
@@ -227,13 +265,12 @@ document.addEventListener('DOMContentLoaded', () => {
         (form.region   && form.region.trim());
 
       let filtered = [];
-
       if (hasSignal){
         filtered = filterDemos(DEMOS, form, {minScore:1, limit:8});
       } else {
         const defId = json.default_demo_id || (DEMOS[0]?.id);
         filtered = DEMOS.filter(d => d.id === defId);
-        leadText.textContent = '（入力が未指定のため）代表的な文書デモのみ表示しています。';
+        if (leadText) leadText.textContent = '（入力が未指定のため）代表的な文書デモのみ表示しています。';
       }
 
       renderResults(filtered);
@@ -242,8 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const initial = forcedDemoId || (filtered[0]?.id) || json.default_demo_id || (DEMOS[0]?.id);
       if(initial) openDemoDoc(initial);
     })
-    .catch(()=>{
+    .catch(err=>{
+      console.error(err);
       docEl.innerHTML='<div class="note">demos.json の読込に失敗しました。</div>';
+      if (leadText) leadText.textContent = '読込に失敗しました。ネットワーク/パスをご確認ください。';
     });
 });
 </script>
