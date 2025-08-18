@@ -1,133 +1,80 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>KAKEHASHI デモ | 診断結果 (Doc Demo MVP)</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="icon" href="data:,">
-<style>
-  :root { --bg:#0b1020; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --accent2:#a78bfa; --chip:#0b1326; --chipb:#2a3953; }
-  *{box-sizing:border-box}
-  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%, rgba(167,139,250,.25), transparent),var(--bg);color:var(--text);font-family:Inter,system-ui,"Noto Sans JP",sans-serif}
-  header{padding:24px;border-bottom:1px solid #1f2937;position:sticky;top:0;background:linear-gradient(180deg,rgba(17,24,39,.9),rgba(17,24,39,.7));backdrop-filter:blur(6px);z-index:10}
-  .wrap{max-width:1200px;margin:0 auto;padding:24px}
-  h1{margin:0 0 8px;font-size:26px}
-  .lead{color:var(--muted);margin:0 0 16px}
-  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
-  .card{background:linear-gradient(180deg,rgba(31,41,55,.75),rgba(17,24,39,.9));border:1px solid #243045;border-radius:14px;padding:16px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-  .chip{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid var(--chipb);background:var(--chip);font-size:12px;color:#cbd5e1}
-  .result-card{background:#0f172a;border:1px solid #243045;border-radius:12px;padding:14px;margin:10px 0}
-  .result-card h3{margin:0 0 6px;font-size:16px}
-  .result-card .meta{font-size:12px;color:#9ca3af;margin-bottom:6px}
-  .result-card .btn{appearance:none;border:none;padding:8px 12px;border-radius:10px;font-weight:700;cursor:pointer}
-  .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#0b1020}
-  .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid #2a3953}
-  #docViewer{background:#0b1326;border:1px solid #243045;border-radius:12px;padding:14px;min-height:360px}
-  #docViewer h3{margin:10px 0 6px;font-size:16px}
-  #docViewer ul{margin:8px 0 8px 18px}
-  #docViewer li{margin:4px 0}
-  .note{font-size:11px;color:#9ca3af;margin-top:6px}
-  @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
-</style>
-</head>
-<body>
-<header>
-  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;">
-    <h1 style="margin:0">診断結果</h1>
-    <a href="./" class="chip" style="text-decoration:none">← 入力に戻る</a>
-  </div>
-</header>
-
-<main class="wrap">
-  <p class="lead" id="leadText">あなたの入力に基づき、文書ベースのデモを提示します。</p>
-
-  <div class="chips" id="formChips"></div>
-
-  <div class="grid">
-    <!-- 左：候補一覧 -->
-    <section class="card" aria-label="提案一覧">
-      <h2 style="margin:0 0 6px;font-size:18px">提案一覧</h2>
-      <div id="resultsGrid"></div>
-    </section>
-
-    <!-- 右：デモビューワ（文書） -->
-    <section class="card" aria-label="デモビューワ">
-      <h2 style="margin:0 0 6px;font-size:18px">デモビューワ</h2>
-      <div id="demoMeta" style="font-size:12px;color:#9ca3af;margin-bottom:6px">デモ未選択</div>
-
-      <div id="docViewer"></div>
-      <div id="creditNote" class="note" style="display:none"></div>
-
-      <p id="scenario" style="margin-top:10px;color:#cbd5e1;font-size:14px">ここにデモの活用シナリオが表示されます。</p>
-      <div id="demoActions" style="display:flex;gap:8px;margin-top:6px"></div>
-    </section>
-  </div>
-</main>
-
-<footer style="color:#6b7280;text-align:center;font-size:12px;padding:24px;">© 2025 KAKEHASHI Project – Prototype (Doc Demo MVP)</footer>
-
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // ---- DOM ----
+  // ========== 入力の復元 ==========
   const chipsEl   = document.getElementById('formChips');
   const grid      = document.getElementById('resultsGrid');
   const leadText  = document.getElementById('leadText');
-  const scenarioEl= document.getElementById('scenario');
+  const scenarioEl = document.getElementById('scenario');
   const demoActionsEl = document.getElementById('demoActions');
   const demoMetaEl = document.getElementById('demoMeta');
-  const docEl     = document.getElementById('docViewer');
-  const creditEl  = document.getElementById('creditNote');
+  const docEl = document.getElementById('docViewer');
+  const creditEl = document.getElementById('creditNote');
 
-  // ---- URL/復元 ----
   const params = new URLSearchParams(location.search);
-  const forceDemoId = params.get('demo_id');
-  const last = JSON.parse(localStorage.getItem('kakehashi:lastForm')||'{}');
-  // 上部チップ（任意）
-  chipsEl.innerHTML = '';
-  if(last.industry){ const d=document.createElement('div'); d.className='chip'; d.textContent='業界: '+last.industry; chipsEl.appendChild(d); }
-  if(last.region){ const d=document.createElement('div'); d.className='chip'; d.textContent='地域: '+last.region; chipsEl.appendChild(d); }
-  if(Array.isArray(last.kpis)&&last.kpis.length){ const d=document.createElement('div'); d.className='chip'; d.textContent='KPI: '+last.kpis.join(' / '); chipsEl.appendChild(d); }
+  const lastForm = JSON.parse(localStorage.getItem('kakehashi:lastForm')||'{}');
+  const form = {
+    industry: params.get('industry') || lastForm.industry || '',
+    region  : params.get('region')   || lastForm.region   || '',
+    problem : params.get('problem')  || lastForm.problem  || '',
+    kpis    : (params.get('kpi')||'').split(',').filter(Boolean)
+  };
+  const forceDemoId = params.get('demo_id') || '';
 
-  // ---- 軽量 Markdown (bold, list, heading風) ----
+  // ========== 軽量ユーティリティ ==========
   const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const md  = (s='') => esc(s)
-    .replace(/^###\s(.+)$/gm,'<h4>$1</h4>')
-    .replace(/^##\s(.+)$/gm,'<h3>$1</h3>')
-    .replace(/^\-\s(.+)$/gm,'<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\n/g,'<br>');
+  const md = (s='') => esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^-\s(.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>').replace(/\n/g,'<br>');
+  const tokens = (s='') => (s.toLowerCase().normalize('NFKC').match(/[\p{Letter}\p{Number}_]+/ug)||[]);
+  const jaccard = (a,b) => { const A=new Set(a),B=new Set(b); const inter=[...A].filter(x=>B.has(x)).length; const uni=new Set([...A,...B]).size; return uni? inter/uni : 0; };
 
-  // ---- 状態 ----
-  let DEMOS = [];
+  // ========== スコアリング（関連度） ==========
+  function scoreDemo(demo, form){
+    let score = 0; const reasons = [];
 
-  // ---- 描画 ----
+    // 1) 業界カテゴリ一致（例：林業/災害/農業…）
+    const indKey = (form.industry||'').split('/')[0]; // 「インフラ点検/建設」→「インフラ点検」
+    if(indKey && demo.category && demo.category.includes(indKey)){ score += 3; reasons.push('業界一致'); }
+
+    // 2) 問題文とのテキスト類似
+    const textDemo = [demo.title, demo.summary, demo.category, (demo.tags||[]).join(' ')].join(' ');
+    const sim = jaccard(tokens(form.problem||''), tokens(textDemo));
+    const simPts = Math.round(sim * 4); // 0〜4点
+    if(simPts>0){ score += simPts; reasons.push(`課題類似${(sim*100).toFixed(0)}%`); }
+
+    // 3) KPI の重なり
+    const kForm = new Set(form.kpis||[]);
+    const kDemo = new Set(demo.kpis||[]);
+    const kHit = [...kForm].filter(k=>kDemo.has(k)).length;
+    if(kHit>0){ score += kHit*2; reasons.push(`KPI一致×${kHit}`); }
+
+    // 4) キーワード直ヒット（タイトル/タグ/要約）
+    const prob = (form.problem||'').toLowerCase();
+    const kw = ['洪水','浸水','赤潮','メタン','森林','NDVI','圃場','養殖','保険','災害','排出','フレア'];
+    const demoKw = (textDemo||'').toLowerCase();
+    const kwHits = kw.filter(k=> prob.includes(k.toLowerCase()) && demoKw.includes(k.toLowerCase())).length;
+    if(kwHits>0){ score += kwHits; reasons.push(`キーワード一致×${kwHits}`); }
+
+    return { score, reasons };
+  }
+
+  // ========== デモ描画 ==========
   function renderDoc(demo){
     if(!demo){ docEl.innerHTML = '<div class="note">デモ未選択</div>'; return; }
 
-    // Meta
-    demoMetaEl.textContent =
-      `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
+    demoMetaEl.textContent = `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
 
-    // 本文
     const bullets = (demo.bullets||[]).map(x=>`<li>${esc(x)}</li>`).join('');
-    const sections = (demo.steps||[]).map(st =>
-      `<h3>■ ${esc(st.title)}</h3><div>${md(st.body_md||'')}</div>`
-    ).join('');
+    const steps = (demo.steps||[]).map(st=>`<h3>■ ${esc(st.title)}</h3><div>${md(st.body_md||'')}</div>`).join('');
     const kpis = (demo.kpis||[]).map(k=>`<span class="chip" style="margin-right:6px">${esc(k)}</span>`).join('');
 
     docEl.innerHTML = `
       <h3 style="margin-top:0">${esc(demo.title)}</h3>
-      ${demo.summary?`<div style="color:#9ca3af;margin:6px 0">${esc(demo.summary)}</div>`:''}
+      <div style="color:#9ca3af;margin:6px 0">${esc(demo.summary||'—')}</div>
       ${bullets?`<ul style="margin-top:8px">${bullets}</ul>`:''}
-      ${sections?`<div style="margin-top:10px">${sections}</div>`:''}
+      <div style="margin-top:10px">${steps}</div>
       ${kpis?`<div style="margin-top:12px">${kpis}</div>`:''}
     `;
 
-    // 出典（デモごとに JSON から動的切替）
+    // 出典
     if(demo.credit && demo.credit.href){
       creditEl.innerHTML = `出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a>`;
       creditEl.style.display = 'block';
@@ -136,8 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
       creditEl.innerHTML = '';
     }
 
-    // シナリオ／CTA
-    scenarioEl.textContent = demo.scenario || '（MVP：文章でのシナリオ記述）';
+    // CTA
     demoActionsEl.innerHTML = '';
     if(demo.cta && demo.cta.href){
       const a = document.createElement('a');
@@ -148,13 +94,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderResults(list){
+  function renderResults(demos, filtered){
     grid.innerHTML = '';
-    leadText.textContent = `文書デモ ${list.length} 件を読み込みました。`;
+    const list = filtered ?? demos;
+
+    leadText.textContent = `関連デモ ${list.length} 件を表示中${filtered ? '' : '（全件）' }。`;
+
+    if(list.length===0){
+      grid.innerHTML = `
+        <div class="result-card">
+          <h3>該当するデモが見つかりませんでした</h3>
+          <p class="meta">入力を広げるか、全件を表示してください。</p>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn btn-ghost" id="showAll">全件を表示</button>
+          </div>
+        </div>`;
+      document.getElementById('showAll')?.addEventListener('click', ()=> renderResults(demos, null));
+      return;
+    }
 
     list.forEach(demo=>{
       const card = document.createElement('div'); card.className='result-card';
-      const h=document.createElement('h3'); h.textContent = demo.title;
+      const h=document.createElement('h3'); h.innerHTML= esc(demo.title);
       const meta=document.createElement('div'); meta.className='meta';
       meta.textContent = `カテゴリ: ${demo.category||'—'} ｜ タグ: ${(demo.tags||[]).join(', ')}`;
       const p=document.createElement('p'); p.textContent = demo.summary||'—';
@@ -172,24 +133,45 @@ document.addEventListener('DOMContentLoaded', () => {
   function openDemoDoc(id){
     const d = DEMOS.find(x=>x.id===id);
     renderDoc(d);
-    // deep-link更新
+    scenarioEl.textContent = d?.scenario || '（MVP：文章でのシナリオ記述）';
     const q = new URLSearchParams(location.search); q.set('demo_id', id);
     history.replaceState(null, '', location.pathname+'?'+q.toString());
   }
 
-  // ---- 起動：単一JSONを読む ----
+  // ========== 起動：demos.json を読み込み → スコアリングしてフィルタ ==========
+  let DEMOS = [];
   fetch('public/demos/demos.json', {cache:'no-store'})
     .then(r=>r.json())
     .then(json=>{
       DEMOS = json.demos||[];
-      renderResults(DEMOS);
-      const initial = forceDemoId || json.default_demo_id || (DEMOS[0]?.id);
+
+      // 1) スコア計算
+      const scored = DEMOS.map(d => ({ demo:d, ...scoreDemo(d, form) }))
+                          .sort((a,b)=> b.score - a.score);
+
+      // 2) 閾値でフィルタ（2点以上を関連とみなす）
+      const THRESHOLD = 2;
+      const related = scored.filter(s=> s.score >= THRESHOLD).map(s=> s.demo);
+
+      // 3) 表示
+      renderResults(DEMOS, related);
+
+      // 4) 初期選択：forceDemoId → 一番スコア高い関連 → 先頭
+      const initial = forceDemoId ||
+                      (related[0]?.id) ||
+                      (DEMOS[0]?.id);
       if(initial) openDemoDoc(initial);
+
+      // 5) フォームチップ復元
+      chipsEl.innerHTML = '';
+      if(form.industry){ const d=document.createElement('div'); d.className='chip'; d.textContent='業界: '+form.industry; chipsEl.appendChild(d); }
+      if(form.region){   const d=document.createElement('div'); d.className='chip'; d.textContent='地域: '+form.region; chipsEl.appendChild(d); }
+      if(Array.isArray(form.kpis)&&form.kpis.length){ const d=document.createElement('div'); d.className='chip'; d.textContent='KPI: '+form.kpis.join(' / '); chipsEl.appendChild(d); }
+      if(form.problem){  const d=document.createElement('div'); d.className='chip'; d.textContent='課題: '+(form.problem.length>22? form.problem.slice(0,22)+'…' : form.problem); chipsEl.appendChild(d); }
     })
     .catch(()=>{
       docEl.innerHTML='<div class="note">demos.json の読込に失敗しました。</div>';
+      renderResults([], []); // 空でもUIは表示
     });
 });
 </script>
-</body>
-</html>
