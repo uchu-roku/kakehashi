@@ -1,12 +1,79 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KAKEHASHI デモ | 診断結果 (Card UI)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#0b1020; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af;
+    --chip:#0b1326; --chipb:#2a3953; --accent:#22d3ee; --accent2:#a78bfa;
+    --ok:#16a34a; --warn:#f59e0b; --line:#243045;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%, rgba(167,139,250,.25), transparent),var(--bg);color:var(--text);font-family:Inter,system-ui,"Noto Sans JP",sans-serif}
+  header{padding:20px 24px;border-bottom:1px solid #1f2937;position:sticky;top:0;background:linear-gradient(180deg,rgba(17,24,39,.9),rgba(17,24,39,.7));backdrop-filter:blur(6px);z-index:10}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px 24px}
+  h1{margin:0 0 8px;font-size:24px}
+  .lead{color:var(--muted);margin:0 0 16px}
+  .grid{display:grid;grid-template-columns:1.12fr .88fr;gap:18px}
+  @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+
+  .card{background:linear-gradient(180deg,rgba(31,41,55,.75),rgba(17,24,39,.9));border:1px solid var(--line);border-radius:14px;padding:16px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+  .chip{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid var(--chipb);background:var(--chip);font-size:12px;color:#cbd5e1}
+
+  /* ===== Card UI for results ===== */
+  .results-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px}
+  .results-count{color:var(--muted);font-size:12px}
+  .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  @media (max-width: 980px){ .cards{grid-template-columns:1fr} }
+
+  .result-card{background:linear-gradient(180deg,rgba(31,41,55,.75),rgba(17,24,39,.9));border:1px solid var(--line);border-radius:14px;padding:14px}
+  .result-title{margin:0 0 6px;font-size:16px}
+  .result-meta{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+  .result-desc{margin:8px 0 10px;color:#cbd5e1;font-size:14px}
+
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--chipb);background:var(--chip);color:#cbd5e1;font-size:12px}
+  .score-badge{border-color:#1f3b56;background:#0b1a2a;color:#93c5fd}
+  .reason-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+  .kpi-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .kpi{background:#0d1b2a;border:1px solid #204060;color:#cdeafe}
+
+  .card-actions{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .btn{appearance:none;border:none;cursor:pointer;font-weight:700;padding:8px 12px;border-radius:10px}
+  .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#0b1020}
+  .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid var(--chipb)}
+
+  /* 折りたたみ詳細 */
+  details{border-top:1px dashed var(--line);margin-top:10px;padding-top:8px}
+  details summary{list-style:none;cursor:pointer;color:#cbd5e1;font-size:13px;display:flex;align-items:center;gap:6px}
+  details summary::marker{display:none}
+  details[open] summary .caret{transform:rotate(90deg)}
+  .caret{transition:transform .15s ease;display:inline-block}
+  .step{margin:8px 0;color:#cbd5e1;font-size:14px}
+  .step h4{margin:0 0 4px;font-size:14px}
+</style>
+</head>
+<body>
+<header class="wrap" style="padding-top:14px;padding-bottom:14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <h1 style="margin:0">診断結果</h1>
+    <a href="./" class="chip" style="text-decoration:none">← 入力に戻る</a>
+  </div>
+</header>
+
 <main class="wrap">
   <p class="lead" id="leadText">あなたの入力に基づき、関連するソリューション候補を提示します。</p>
 
   <div class="chips" id="formChips"></div>
 
   <div class="grid">
-    <!-- 左：候補一覧 -->
+    <!-- 左：カード型の候補一覧 -->
     <section class="card">
-      <h2 style="margin:0 0 6px;font-size:18px">提案一覧</h2>
       <div id="resultsGrid"></div>
     </section>
 
@@ -25,6 +92,7 @@
   </div>
 </main>
 
+<footer style="color:#6b7280;text-align:center;font-size:12px;padding:24px;">© 2025 KAKEHASHI Project – Prototype</footer>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,11 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const docEl        = document.getElementById('docViewer');
   const creditEl     = document.getElementById('creditNote');
 
-  // クリティカル要素の存在チェック（無ければ安全終了）
-  if (!docEl || !grid) {
-    console.warn('[results] 必須DOMが見つかりません。HTML側のIDを確認してください。');
-    return;
-  }
+  if (!grid || !docEl) return;
 
   // ---------- 入力の復元（URL優先 → localStorage） ----------
   const urlParams = new URLSearchParams(location.search);
@@ -57,7 +121,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const forcedDemoId = urlParams.get('demo_id') || '';
 
-  // ---------- 共有状態 ----------
   let DEMOS = [];
 
   // ---------- Utils ----------
@@ -80,7 +143,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return uni ? inter/uni : 0;
   };
 
-  // 自然文 → カテゴリ推定
   const CAT_HINT_RULES = [
     {rx:/林業|齢級|立木|路網|材積/,            cat:'林業'},
     {rx:/洪水|浸水|冠水|台風|氾濫|内水|外水/,    cat:'災害'},
@@ -91,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const inferCatsFromProblem = (text='') =>
     Array.from(new Set(CAT_HINT_RULES.filter(r => r.rx.test(text)).map(r => r.cat)));
 
-  // ---------- スコアリング ----------
   function scoreDemo(demo, form){
     let score = 0, reasons = [];
     const indCat = IND2CAT(form.industry);
@@ -124,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return {score, reasons};
   }
 
-  // ---------- フィルタ ----------
   function filterDemos(all, form, {minScore=1, limit=8} = {}) {
     let scored = all
       .map(d => ({ ...d, _rank: scoreDemo(d, form) }))
@@ -142,25 +202,20 @@ document.addEventListener('DOMContentLoaded', () => {
     return scored.slice(0, limit); // 0件は0件のまま
   }
 
-  // ---------- 文書デモの描画 ----------
   function renderDoc(demo){
     if(!demo){
-      if (demoMetaEl) demoMetaEl.textContent = 'デモ未選択';
+      demoMetaEl.textContent = 'デモ未選択';
       docEl.innerHTML = '<div class="note">デモを選択してください。</div>';
-      if (creditEl){ creditEl.style.display='none'; creditEl.innerHTML=''; }
-      if (demoActionsEl) demoActionsEl.innerHTML='';
-      if (scenarioEl) scenarioEl.textContent='（MVP：文章でのシナリオ記述）';
+      creditEl.style.display='none'; creditEl.innerHTML='';
+      demoActionsEl.innerHTML='';
+      scenarioEl.textContent='（MVP：文章でのシナリオ記述）';
       return;
     }
-    if (demoMetaEl){
-      demoMetaEl.textContent =
-        `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
-    }
+    demoMetaEl.textContent =
+      `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
 
     const bullets = (demo.bullets||[]).map(x=>`<li>${esc(x)}</li>`).join('');
-    const steps = (demo.steps||[]).map(st=>
-      `<h3>■ ${esc(st.title)}</h3><div>${md(st.body_md||'')}</div>`
-    ).join('');
+    const steps = (demo.steps||[]).map(st=>`<div class="step"><h4>■ ${esc(st.title)}</h4><div>${md(st.body_md||'')}</div></div>`).join('');
     const kpis = (demo.kpis||[]).map(k=>`<span class="chip" style="margin-right:6px">${esc(k)}</span>`).join('');
 
     docEl.innerHTML = `
@@ -171,63 +226,91 @@ document.addEventListener('DOMContentLoaded', () => {
       ${kpis?`<div style="margin-top:12px">${kpis}</div>`:''}
     `;
 
-    if (creditEl){
-      if(demo.credit?.href){
-        creditEl.innerHTML = `出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a>`;
-        creditEl.style.display = 'block';
-      }else{
-        creditEl.style.display = 'none';
-        creditEl.innerHTML = '';
-      }
+    if(demo.credit?.href){
+      creditEl.innerHTML = `出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a>`;
+      creditEl.style.display = 'block';
+    }else{
+      creditEl.style.display = 'none';
+      creditEl.innerHTML = '';
     }
 
-    if (demoActionsEl){
-      demoActionsEl.innerHTML = '';
-      if(demo.cta?.href){
-        const a = document.createElement('a');
-        a.className='btn btn-primary';
-        a.href = demo.cta.href; a.target='_blank'; a.rel='noopener';
-        a.textContent = demo.cta.label || '相談する';
-        demoActionsEl.appendChild(a);
-      }
+    demoActionsEl.innerHTML = '';
+    if(demo.cta?.href){
+      const a = document.createElement('a');
+      a.className='btn btn-primary';
+      a.href = demo.cta.href; a.target='_blank'; a.rel='noopener';
+      a.textContent = demo.cta.label || '相談する';
+      demoActionsEl.appendChild(a);
     }
-    if (scenarioEl) scenarioEl.textContent = demo.scenario || '（MVP：文章でのシナリオ記述）';
+    scenarioEl.textContent = demo.scenario || '（MVP：文章でのシナリオ記述）';
   }
 
   function renderResults(list){
-    if (!grid || !leadText) return;
-    grid.innerHTML = '';
+    grid.innerHTML = `
+      <div class="results-header">
+        <h2 style="margin:0;font-size:18px">提案一覧</h2>
+        <span class="results-count">表示件数: ${list.length}</span>
+      </div>
+      <div class="cards" id="cards"></div>
+    `;
+    const cards = document.getElementById('cards');
 
     if (list.length === 0){
       leadText.textContent = '入力内容に合致する文書デモは見つかりませんでした。条件を広げてお試しください。';
-      grid.insertAdjacentHTML('beforeend',
-        '<div class="result-card"><p style="margin:0;color:#9ca3af;">該当する候補がありません。</p></div>');
+      cards.insertAdjacentHTML('beforeend',
+        `<div class="result-card"><p class="result-desc" style="margin:0">該当する候補がありません。</p></div>`);
       return;
     }
 
     leadText.textContent = `文書デモ ${list.length} 件を表示（入力内容に基づき抽出）`;
+
     list.forEach(demo=>{
-      const card=document.createElement('div'); card.className='result-card';
-      const h=document.createElement('h3'); h.innerHTML= esc(demo.title);
-      const meta=document.createElement('div'); meta.className='meta';
-      meta.textContent = `カテゴリ: ${demo.category||'—'} ｜ タグ: ${(demo.tags||[]).join(', ')}`;
-      const p=document.createElement('p'); p.textContent = demo.summary||'—';
+      const reasons = (demo._rank?.reasons||[]).map(r=>`<span class="badge">${esc(r)}</span>`).join('');
+      const kpis    = (demo.kpis||[]).map(k=>`<span class="badge kpi">📊 ${esc(k)}</span>`).join('');
+      const tags    = (demo.tags||[]).join(', ');
+      const steps   = (demo.steps||[]).map(st=>`<div class="step"><h4>■ ${esc(st.title)}</h4><div>${md(st.body_md||'')}</div></div>`).join('');
 
-      if (demo._rank?.reasons?.length){
-        const chips=document.createElement('div'); chips.className='chips';
-        demo._rank.reasons.forEach(r=>{
-          const c=document.createElement('div'); c.className='chip'; c.textContent=r; chips.appendChild(c);
-        });
-        card.appendChild(chips);
-      }
+      const html = `
+        <article class="result-card">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <h3 class="result-title">${esc(demo.title)}</h3>
+            ${demo._rank ? `<span class="badge score-badge">合致度: ${demo._rank.score}</span>` : ''}
+          </div>
 
-      const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px'; actions.style.marginTop='8px';
-      const btn=document.createElement('button'); btn.className='btn btn-primary'; btn.textContent='デモを見る';
-      btn.onclick=()=> openDemoDoc(demo.id);
-      actions.appendChild(btn);
+          <div class="result-meta">
+            <span>カテゴリ: ${esc(demo.category||'—')}</span>
+            ${tags ? `<span>タグ: ${esc(tags)}</span>` : ''}
+            ${demo.region_hint?.length ? `<span>地域: ${esc(demo.region_hint.join(' / '))}</span>` : ''}
+            ${demo.data_sources?.length ? `<span>データ源: ${esc(demo.data_sources.join('/'))}</span>` : ''}
+          </div>
 
-      card.appendChild(h); card.appendChild(meta); card.appendChild(p); card.appendChild(actions);
-      grid.appendChild(card);
+          <p class="result-desc">${esc(demo.summary||'—')}</p>
+
+          ${reasons ? `<div class="reason-chips">${reasons}</div>` : ''}
+
+          ${kpis ? `<div class="kpi-wrap">${kpis}</div>` : ''}
+
+          <div class="card-actions">
+            <button class="btn btn-primary">デモを見る</button>
+            ${demo.cta?.href ? `<a class="btn btn-ghost" href="${demo.cta.href}" target="_blank" rel="noopener">${esc(demo.cta.label||'相談する')}</a>`:''}
+          </div>
+
+          <details>
+            <summary><span class="caret">▶</span> 詳細（ステップ・根拠）</summary>
+            ${steps || `<div class="step" style="color:#9ca3af">詳細ステップは準備中です。</div>`}
+            ${demo.credit?.href ? `<div class="step" style="font-size:12px;color:#9ca3af">出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a></div>`:''}
+          </details>
+        </article>
+      `;
+
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      const cardEl = wrapper.firstElementChild;
+
+      // 右パネルと連動
+      cardEl.querySelector('.btn.btn-primary').addEventListener('click', ()=> openDemoDoc(demo.id));
+
+      cards.appendChild(cardEl);
     });
   }
 
@@ -239,23 +322,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------- 起動：JSON読込 → 抽出 → 描画 ----------
-  // GitHub Pages の相対パス問題を避けるため先頭に './' を付けています
-  fetch('./public/demos/demos.json', {cache:'no-store'})
-    .then(r=>{
-      if(!r.ok) throw new Error('demos.json fetch failed: '+r.status);
-      return r.json();
-    })
+  fetch('public/demos/demos.json', {cache:'no-store'})
+    .then(r=>r.json())
     .then(json=>{
       DEMOS = json.demos||[];
 
       // 入力チップ
-      if (chipsEl){
-        chipsEl.innerHTML='';
-        if(form.industry){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">業界: ${esc(form.industry)}</div>`); }
-        if(form.region){   chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">地域: ${esc(form.region)}</div>`); }
-        if(form.kpis?.length){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">KPI: ${esc(form.kpis.join(' / '))}</div>`); }
-        if(form.problem){  chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">自然文あり</div>`); }
-      }
+      chipsEl.innerHTML='';
+      if(form.industry){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">業界: ${esc(form.industry)}</div>`); }
+      if(form.region){   chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">地域: ${esc(form.region)}</div>`); }
+      if(form.kpis?.length){ chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">KPI: ${esc(form.kpis.join(' / '))}</div>`); }
+      if(form.problem){  chipsEl.insertAdjacentHTML('beforeend', `<div class="chip">自然文あり</div>`); }
 
       // 入力シグナル
       const hasSignal =
@@ -265,12 +342,18 @@ document.addEventListener('DOMContentLoaded', () => {
         (form.region   && form.region.trim());
 
       let filtered = [];
+
       if (hasSignal){
         filtered = filterDemos(DEMOS, form, {minScore:1, limit:8});
+        if (filtered.length === 0){
+          leadText.textContent = '入力内容に合致する文書デモは見つかりませんでした。条件を広げてお試しください。';
+        } else {
+          leadText.textContent = `文書デモ ${filtered.length} 件を表示（入力内容に基づき抽出）`;
+        }
       } else {
         const defId = json.default_demo_id || (DEMOS[0]?.id);
         filtered = DEMOS.filter(d => d.id === defId);
-        if (leadText) leadText.textContent = '（入力が未指定のため）代表的な文書デモのみ表示しています。';
+        leadText.textContent = '（入力が未指定のため）代表的な文書デモのみ表示しています。';
       }
 
       renderResults(filtered);
@@ -279,10 +362,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const initial = forcedDemoId || (filtered[0]?.id) || json.default_demo_id || (DEMOS[0]?.id);
       if(initial) openDemoDoc(initial);
     })
-    .catch(err=>{
-      console.error(err);
+    .catch(()=>{
       docEl.innerHTML='<div class="note">demos.json の読込に失敗しました。</div>';
-      if (leadText) leadText.textContent = '読込に失敗しました。ネットワーク/パスをご確認ください。';
     });
 });
 </script>
+</body>
+</html>
