@@ -3,11 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>KAKEHASHI デモ | 診断結果 v1.3</title>
+<title>KAKEHASHI デモ | 診断結果 (Doc Demo MVP)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   :root { --bg:#0b1020; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --accent2:#a78bfa; --chip:#0b1326; --chipb:#2a3953; }
   *{box-sizing:border-box}
@@ -26,12 +25,11 @@
   .result-card .btn{appearance:none;border:none;padding:8px 12px;border-radius:10px;font-weight:700;cursor:pointer}
   .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#0b1020}
   .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid #2a3953}
-  #map{width:100%;height:420px;border-radius:12px;border:1px solid #243045;}
-  #legend .item{display:flex;align-items:center;gap:8px;font-size:12px;margin:6px 0}
-  #legend .sw{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;border:1px solid #334155}
-  #aiOverlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.35);align-items:center;justify-content:center;border-radius:12px}
-  #aiOverlay .spinner{border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
+  #docViewer{background:#0b1326;border:1px solid #243045;border-radius:12px;padding:14px;min-height:360px}
+  #docViewer h3{margin:10px 0 6px;font-size:16px}
+  #docViewer ul{margin:8px 0 8px 18px}
+  #docViewer li{margin:4px 0}
+  .note{font-size:11px;color:#9ca3af;margin-top:6px}
   @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
 </style>
 </head>
@@ -44,397 +42,153 @@
 </header>
 
 <main class="wrap">
-  <p class="lead" id="leadText">あなたの入力に基づき、関連するソリューション候補を提示します。</p>
+  <p class="lead" id="leadText">あなたの入力に基づき、文書ベースのデモを提示します。</p>
 
   <div class="chips" id="formChips"></div>
 
   <div class="grid">
     <!-- 左：候補一覧 -->
-    <section class="card">
+    <section class="card" aria-label="提案一覧">
       <h2 style="margin:0 0 6px;font-size:18px">提案一覧</h2>
       <div id="resultsGrid"></div>
     </section>
 
-    <!-- 右：デモビューワ -->
-    <section class="card" style="position:relative">
+    <!-- 右：デモビューワ（文書） -->
+    <section class="card" aria-label="デモビューワ">
       <h2 style="margin:0 0 6px;font-size:18px">デモビューワ</h2>
       <div id="demoMeta" style="font-size:12px;color:#9ca3af;margin-bottom:6px">デモ未選択</div>
-    <div style="position:relative">
-      <div id="map"></div>
-      <div id="aiOverlay"><div class="spinner"></div></div>
-    </div>
-    
-    <!-- ★ここに追加 -->
-    <div id="creditNote" class="note" style="display:none;font-size:11px;color:#9ca3af;margin-top:6px"></div>
-    <div id="legend" style="margin-top:10px"></div>
-    
-    <div id="legend" style="margin-top:10px"></div>
-    <p id="scenario" style="margin-top:10px;color:#cbd5e1;font-size:14px">ここにデモの活用シナリオが表示されます。</p>
 
+      <div id="docViewer"></div>
+      <div id="creditNote" class="note" style="display:none"></div>
+
+      <p id="scenario" style="margin-top:10px;color:#cbd5e1;font-size:14px">ここにデモの活用シナリオが表示されます。</p>
       <div id="demoActions" style="display:flex;gap:8px;margin-top:6px"></div>
     </section>
   </div>
 </main>
 
-<footer style="color:#6b7280;text-align:center;font-size:12px;padding:24px;">© 2025 KAKEHASHI Project – Prototype (v1.3)</footer>
+<footer style="color:#6b7280;text-align:center;font-size:12px;padding:24px;">© 2025 KAKEHASHI Project – Prototype (Doc Demo MVP)</footer>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // デモごとの出典情報（必要に応じて増やせます）
-  const DEMO_CREDIT = {
-    // [0] 森林在庫（齢級推定）
-    "forestry_hokkaido_202405": {
-      label: "SORABATAKE",
-      href: "https://sorabatake.jp/32461/"
-    },
-    // 例：洪水デモに何か出典を付けたい場合
-    // "flood_fukuoka_20240712": { label: "出典サイト名", href: "https://example.com" },
-  };
+  // ---- DOM ----
   const chipsEl   = document.getElementById('formChips');
   const grid      = document.getElementById('resultsGrid');
   const leadText  = document.getElementById('leadText');
-  const overlayEl = document.getElementById('aiOverlay');
-  const legendEl  = document.getElementById('legend');
-  const scenarioEl = document.getElementById('scenario');
+  const scenarioEl= document.getElementById('scenario');
   const demoActionsEl = document.getElementById('demoActions');
+  const demoMetaEl = document.getElementById('demoMeta');
+  const docEl     = document.getElementById('docViewer');
+  const creditEl  = document.getElementById('creditNote');
 
-  // 入力の復元
+  // ---- URL/復元 ----
   const params = new URLSearchParams(location.search);
-  // 外部NDVI画像の差し替え用（森林デモ限定で使う）
-  const overlayUrlParam      = params.get('overlay_url');       // 画像直リンク（.png/.jpg）
-  const overlayBBoxParam     = params.get('overlay_bbox');      // "minLon,minLat,maxLon,maxLat"
-  const overlayOpacityParam  = params.get('overlay_opacity');   // 0〜1（例: 0.65）
-  const overlayModeParam     = params.get('overlay_mode');      // "ndvi" など（凡例切替用）
-  const form = {
-    industry: params.get('industry') || (JSON.parse(localStorage.getItem('kakehashi:lastForm')||'{}').industry||''),
-    region  : params.get('region') || '',
-    problem : params.get('problem') || '',
-    kpis    : (params.get('kpi')||'').split(',').filter(Boolean)
-  };
-  const segs = JSON.parse(localStorage.getItem('kakehashi:lastSegs')||'[]');
   const forceDemoId = params.get('demo_id');
+  const last = JSON.parse(localStorage.getItem('kakehashi:lastForm')||'{}');
+  // 上部チップ（任意）
+  chipsEl.innerHTML = '';
+  if(last.industry){ const d=document.createElement('div'); d.className='chip'; d.textContent='業界: '+last.industry; chipsEl.appendChild(d); }
+  if(last.region){ const d=document.createElement('div'); d.className='chip'; d.textContent='地域: '+last.region; chipsEl.appendChild(d); }
+  if(Array.isArray(last.kpis)&&last.kpis.length){ const d=document.createElement('div'); d.className='chip'; d.textContent='KPI: '+last.kpis.join(' / '); chipsEl.appendChild(d); }
 
-  console.info('[KAKEHASHI/results] form=', form, 'segs=', segs, 'forceDemoId=', forceDemoId);
+  // ---- 軽量 Markdown (bold, list, heading風) ----
+  const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const md  = (s='') => esc(s)
+    .replace(/^###\s(.+)$/gm,'<h4>$1</h4>')
+    .replace(/^##\s(.+)$/gm,'<h3>$1</h3>')
+    .replace(/^\-\s(.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
 
-  // SEG→既定デモ
-  const DEMO_BY_SEG = {
-    "SEG_FLOOD": "flood_fukuoka_20240712",
-    "SEG_FORESTRY_SME": "forestry_hokkaido_202405",
-    "SEG_REDTIDE": "redtide_seto_202408",
-    "SEG_AGRI_PROD": "agri_ndvi_hokkaido_202406",
-    "SEG_METHANE": "methane_toc_202501"
-  };
-  // 業界→既定デモ（SEGが無い時の保険）
-  const DEMO_BY_INDUSTRY = {
-    "林業": "forestry_hokkaido_202405",
-    "災害": "flood_fukuoka_20240712",
-    "農業": "agri_ndvi_hokkaido_202406",
-    "水環境": "redtide_seto_202408",
-    "エネルギー": "methane_toc_202501",
-    "インフラ点検": "flood_fukuoka_20240712"
-  };
+  // ---- 状態 ----
+  let DEMOS = [];
 
-  // ソリューションDB（空でも必ず配列）
-  window.DB = window.DB || {};
-  window.DB.solutions = window.DB.solutions || [
-    { sol_id:"sol_flood_01", title:"洪水・浸水深推定", provider:"KAKEHASHI Demo", service_name:"Flood Insight", use_case_category:"災害", description:"豪雨時の浸水深を把握して優先点検ルートを策定。", linked_segments:"SEG_FLOOD;SEG_EMERGENCY;SEG_INSURANCE", region_hint:["福岡","九州"], default_demo_id:"flood_fukuoka_20240712", data_sources:"SAR/DEM", delivery_access:"WebUI/API" },
-    { sol_id:"sol_agri_01", title:"NDVI圃場モニタ", provider:"KAKEHASHI Demo", service_name:"Agri NDVI", use_case_category:"農業", description:"生育ムラを見える化し、追肥判断を支援。", linked_segments:"SEG_AGRI_PROD", region_hint:["北海道","空知","札幌"], default_demo_id:"agri_ndvi_hokkaido_202406", data_sources:"Sentinel-2", delivery_access:"WebUI" },
-    { sol_id:"sol_forest_01", title:"森林在庫（齢級推定）", provider:"KAKEHASHI Demo", service_name:"Forest Stock", use_case_category:"林業", description:"齢級分布から施業対象区画を抽出。", linked_segments:"SEG_FORESTRY_SME;SEG_FORESTRY_PUBLIC", region_hint:["北海道","道央"], default_demo_id:"forestry_hokkaido_202405", data_sources:"SAR/光学/DEM", delivery_access:"WebUI" },
-    { sol_id:"sol_methane_01", title:"メタン/フレア監視", provider:"KAKEHASHI Demo", service_name:"Methane TOC", use_case_category:"エネルギー", description:"CH4ホットスポットを継続監視し、ESG報告に活用。", linked_segments:"SEG_METHANE;SEG_REGULATOR;SEG_OILGAS", region_hint:["湾岸","プラント"], default_demo_id:"methane_toc_202501", data_sources:"SWIR/TIR", delivery_access:"WebUI/API" },
-    { sol_id:"sol_redtide_01", title:"赤潮・クロロフィル指標", provider:"KAKEHASHI Demo", service_name:"HAB Monitor", use_case_category:"水環境", description:"クロロフィル濃度の高い海域を広域監視。", linked_segments:"SEG_REDTIDE;SEG_AQUA_SME", region_hint:["瀬戸内","内海"], default_demo_id:"redtide_seto_202408", data_sources:"光学", delivery_access:"WebUI" }
-  ];
+  // ---- 描画 ----
+  function renderDoc(demo){
+    if(!demo){ docEl.innerHTML = '<div class="note">デモ未選択</div>'; return; }
 
-  // -------- スコアリング / 描画 --------
-  function regionMatchScore(hints, reg){ if(!hints || !reg) return 0; const t = reg.toLowerCase(); return hints.some(h=>t && t.includes(h.toLowerCase()))?1:0; }
-  function tokenizeJa(s){ return (s||"").toLowerCase().split(/[^\p{Letter}\p{Number}]+/u).filter(Boolean); }
-  function jaccard(a,b){ const A=new Set(a),B=new Set(b); const inter=[...A].filter(x=>B.has(x)).length; const uni=new Set([...A,...B]).size; return uni?(inter/uni):0; }
-  function scoreSolution(sol, form){
-    let score=0; const reasons=[];
-    const indKey = (form.industry||'').split('/')[0];
-    if(sol.use_case_category && indKey && sol.use_case_category.includes(indKey)){ score+=2; reasons.push('業界一致'); }
-    const kpiHits = form.kpis.filter(k => (sol.title+sol.description).includes(k)).length;
-    if(kpiHits>0){ score += kpiHits; reasons.push(`KPI一致×${kpiHits}`); }
-    const linked = (sol.linked_segments||"").split(';').filter(Boolean);
-    const segHit = linked.filter(s=>segs.includes(s)).length;
-    if(segHit>0){ score += segHit*3; reasons.push(`SEG一致×${segHit}`); }
-    const sim = jaccard(tokenizeJa(form.problem), tokenizeJa(`${sol.title} ${sol.description} ${sol.use_case_category}`));
-    const simPts = Math.round(sim*3); score += simPts; if(simPts>0) reasons.push(`文章類似${(sim*100).toFixed(0)}%`);
-    const regPts = regionMatchScore(sol.region_hint||[], form.region);
-    if(regPts>0){ score += regPts; reasons.push('地域近接'); }
-    return {score, reasons};
-  }
+    // Meta
+    demoMetaEl.textContent =
+      `${demo.title}｜カテゴリ: ${demo.category||'—'}｜データ源: ${(demo.data_sources||[]).join('/')}｜最終観測: ${demo.last_obs||'—'}`;
 
-  function renderFormChips(){
-    if(!chipsEl) return;
-    chipsEl.innerHTML = "";
-    if(form.industry){ const d=document.createElement('div'); d.className='chip'; d.textContent=`業界: ${form.industry}`; chipsEl.appendChild(d); }
-    if(form.region){ const d=document.createElement('div'); d.className='chip'; d.textContent=`地域: ${form.region}`; chipsEl.appendChild(d); }
-    if(form.kpis.length){ const d=document.createElement('div'); d.className='chip'; d.textContent=`KPI: ${form.kpis.join(' / ')}`; chipsEl.appendChild(d); }
-    if(segs.length){ const d=document.createElement('div'); d.className='chip'; d.textContent=`SEG: ${segs.join(', ')}`; chipsEl.appendChild(d); }
-  }
+    // 本文
+    const bullets = (demo.bullets||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+    const sections = (demo.steps||[]).map(st =>
+      `<h3>■ ${esc(st.title)}</h3><div>${md(st.body_md||'')}</div>`
+    ).join('');
+    const kpis = (demo.kpis||[]).map(k=>`<span class="chip" style="margin-right:6px">${esc(k)}</span>`).join('');
 
-  function ensureFallbackSolutions(scored){
-    if(scored.length>0) return scored;
+    docEl.innerHTML = `
+      <h3 style="margin-top:0">${esc(demo.title)}</h3>
+      ${demo.summary?`<div style="color:#9ca3af;margin:6px 0">${esc(demo.summary)}</div>`:''}
+      ${bullets?`<ul style="margin-top:8px">${bullets}</ul>`:''}
+      ${sections?`<div style="margin-top:10px">${sections}</div>`:''}
+      ${kpis?`<div style="margin-top:12px">${kpis}</div>`:''}
+    `;
 
-    console.info('[KAKEHASHI/results] fallback: no scored solutions, generating from SEG/industry');
-    // SEG優先 → なければ industry で 1件作る
-    const segDemo = segs.map(s=>DEMO_BY_SEG[s]).find(Boolean);
-    const indKey  = (form.industry||'').split('/')[0];
-    const indDemo = DEMO_BY_INDUSTRY[indKey] || null;
-    const demoId  = segDemo || indDemo;
-
-    if(demoId){
-      const titleMap = {
-        'forestry_hokkaido_202405':'森林在庫（齢級推定）',
-        'flood_fukuoka_20240712':'洪水・浸水深推定',
-        'agri_ndvi_hokkaido_202406':'NDVI圃場モニタ',
-        'redtide_seto_202408':'赤潮・クロロフィル指標',
-        'methane_toc_202501':'メタン/フレア監視'
-      };
-      const categoryMap = {
-        'forestry_hokkaido_202405':'林業','flood_fukuoka_20240712':'災害','agri_ndvi_hokkaido_202406':'農業','redtide_seto_202408':'水環境','methane_toc_202501':'エネルギー'
-      };
-      const sol = {
-        sol_id:'fallback_01',
-        title: titleMap[demoId] || '関連デモ',
-        provider:'KAKEHASHI Demo',
-        service_name:'Demo',
-        use_case_category: categoryMap[demoId] || (indKey||''),
-        description:'入力に近いデモをプレビューできます。',
-        linked_segments: (segs.join(';')||''),
-        region_hint: [],
-        default_demo_id: demoId,
-        data_sources:'—',
-        delivery_access:'WebUI'
-      };
-      const scoredOne = {...sol, _score:1, _reasons:['簡易一致（fallback）']};
-      return [scoredOne];
-    }
-    return [];
-  }
-
-  function renderResults(){
-    if(!grid || !leadText) return;
-    grid.innerHTML = "";
-
-    let scored = (window.DB.solutions||[]).map(sol=>{
-      const {score,reasons} = scoreSolution(sol, form);
-      return {...sol,_score:score,_reasons:reasons};
-    }).sort((a,b)=>b._score-a._score);
-
-    scored = ensureFallbackSolutions(scored);
-
-    if(scored.length){
-      leadText.textContent = `入力内容に基づき ${scored.length} 件の候補を見つけました。合致度の高い順に表示しています。`;
-      scored.slice(0,8).forEach(sol=>{
-        const card=document.createElement('div'); card.className='result-card';
-        const h=document.createElement('h3'); h.innerHTML=`<span class="score">[${sol._score}]</span> ${sol.title}`;
-        const meta=document.createElement('div'); meta.className='meta'; meta.textContent=`${sol.provider} / ${sol.service_name} ｜ カテゴリ: ${sol.use_case_category}`;
-        const p=document.createElement('p'); p.textContent=sol.description;
-
-        const chips=document.createElement('div'); chips.className='chips';
-        (sol._reasons||[]).forEach(r=>{ const c=document.createElement('div'); c.className='chip'; c.textContent=r; chips.appendChild(c); });
-
-        const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px'; actions.style.marginTop='8px';
-        const btnDemo=document.createElement('button'); btnDemo.className='btn btn-primary'; btnDemo.textContent='デモを見る';
-        btnDemo.onclick=()=>openDemo(sol.default_demo_id, sol.title, true);
-        const btnDetail=document.createElement('button'); btnDetail.className='btn btn-ghost'; btnDetail.textContent='詳細（シナリオ）';
-        btnDetail.onclick=()=>openDemo(sol.default_demo_id, sol.title, true);
-        actions.appendChild(btnDemo); actions.appendChild(btnDetail);
-
-        card.appendChild(h); card.appendChild(meta); card.appendChild(p); card.appendChild(chips); card.appendChild(actions);
-        grid.appendChild(card);
-      });
+    // 出典（デモごとに JSON から動的切替）
+    if(demo.credit && demo.credit.href){
+      creditEl.innerHTML = `出典: <a href="${demo.credit.href}" target="_blank" rel="noopener">${esc(demo.credit.label||demo.credit.href)}</a>`;
+      creditEl.style.display = 'block';
     }else{
-      leadText.textContent = '該当するソリューションが見つかりませんでした。右側の「デモを見る」ボタンでプレビューできます。';
+      creditEl.style.display = 'none';
+      creditEl.innerHTML = '';
     }
 
-    // 初回オートデモ（SEG→業界の順で決定）
-    const autoDemo = segs.map(s=>DEMO_BY_SEG[s]).find(Boolean) ||
-                     DEMO_BY_INDUSTRY[(form.industry||'').split('/')[0]] ||
-                     null;
-    if(forceDemoId){ openDemo(forceDemoId, 'プレビュー', true); }
-    else if(autoDemo){ openDemo(autoDemo, 'プレビュー', false); }
-  }
-
-  // --------- 地図／デモ ----------
-  let map, overlayTile, overlayImage, vectorLayers = {};
-  function ensureMap(center=[35,135], zoom=5){
-    if(!map){
-      map = L.map('map');
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+    // シナリオ／CTA
+    scenarioEl.textContent = demo.scenario || '（MVP：文章でのシナリオ記述）';
+    demoActionsEl.innerHTML = '';
+    if(demo.cta && demo.cta.href){
+      const a = document.createElement('a');
+      a.className='btn btn-primary';
+      a.href = demo.cta.href; a.target='_blank'; a.rel='noopener';
+      a.textContent = demo.cta.label || '相談する';
+      demoActionsEl.appendChild(a);
     }
-    map.setView(center, zoom);
   }
 
-  function addOpacityControl(layerRef, init=0.8){
-    const old = document.getElementById('opacityCtl'); if(old) old.remove();
-    const wrap = document.createElement('div');
-    wrap.id = 'opacityCtl';
-    wrap.style.marginTop = '10px';
-    wrap.innerHTML = `
-      <label style="font-size:12px;color:#9ca3af;">オーバーレイ不透明度</label>
-      <input type="range" min="0" max="1" step="0.05" value="${init}" style="width:240px;display:block;margin-top:4px;">`;
-    legendEl.insertAdjacentElement('afterend', wrap);
-    wrap.querySelector('input').addEventListener('input', (ev)=>{
-      const v = parseFloat(ev.target.value);
-      if(layerRef && layerRef.setOpacity) layerRef.setOpacity(v);
-      if(overlayImage && overlayImage.setOpacity) overlayImage.setOpacity(v);
+  function renderResults(list){
+    grid.innerHTML = '';
+    leadText.textContent = `文書デモ ${list.length} 件を読み込みました。`;
+
+    list.forEach(demo=>{
+      const card = document.createElement('div'); card.className='result-card';
+      const h=document.createElement('h3'); h.textContent = demo.title;
+      const meta=document.createElement('div'); meta.className='meta';
+      meta.textContent = `カテゴリ: ${demo.category||'—'} ｜ タグ: ${(demo.tags||[]).join(', ')}`;
+      const p=document.createElement('p'); p.textContent = demo.summary||'—';
+
+      const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px'; actions.style.marginTop='8px';
+      const btn=document.createElement('button'); btn.className='btn btn-primary'; btn.textContent='デモを見る';
+      btn.onclick=()=> openDemoDoc(demo.id);
+      actions.appendChild(btn);
+
+      card.appendChild(h); card.appendChild(meta); card.appendChild(p); card.appendChild(actions);
+      grid.appendChild(card);
     });
   }
 
-  function renderMetrics(metrics){
-    const old = document.getElementById('metricBar'); if(old) old.remove();
-    if(!Array.isArray(metrics) || metrics.length===0) return;
-    const bar = document.createElement('div');
-    bar.id = 'metricBar';
-    bar.style.display='flex'; bar.style.flexWrap='wrap'; bar.style.gap='8px'; bar.style.marginTop='10px';
-    metrics.forEach(m=>{
-      const card = document.createElement('div');
-      card.className = 'chip';
-      card.innerHTML = `<strong>${m.value}</strong>｜${m.label}`;
-      bar.appendChild(card);
-    });
-    scenarioEl.insertAdjacentElement('beforebegin', bar);
+  function openDemoDoc(id){
+    const d = DEMOS.find(x=>x.id===id);
+    renderDoc(d);
+    // deep-link更新
+    const q = new URLSearchParams(location.search); q.set('demo_id', id);
+    history.replaceState(null, '', location.pathname+'?'+q.toString());
   }
 
-  async function openDemo(demoId, title, scrollToScenario=false){
-    if(!demoId){ console.info('[KAKEHASHI/results] openDemo: demoId is empty'); return; }
-    const url = `public/demos/${demoId}/index.json`;
-    overlayEl.style.display='flex';
-    let meta=null;
-    try{
-      const res=await fetch(url,{cache:'no-store'}); if(res.ok) meta=await res.json();
-    }catch(e){ console.warn('fetch demo meta failed', e); }
-    meta = meta || { title:`${title}（デモ情報未設定）`, last_obs:'', tileUrl:'', center:[35,135], zoom:5, legend:[] };
-// ★ [0] 森林在庫（forestry_hokkaido_202405）だけ外部NDVIを重ねる
-    if (demoId === 'forestry_hokkaido_202405') {
-      // いただいた画像URL（Sorabatake）
-      const fallbackNdviUrl = 'https://sorabatake.jp/wp-content/uploads/2023/05/image24-1-1300x1166.png';
-    
-      // bbox は北海道ざっくり既定 → URLパラメータがあれば優先
-      let bbox = [139.0, 41.2, 147.8, 45.7]; // [minLon, minLat, maxLon, maxLat]
-      if (overlayBBoxParam) {
-        const arr = overlayBBoxParam.split(',').map(Number);
-        if (arr.length === 4 && arr.every(v => Number.isFinite(v))) bbox = arr;
-      }
-    
-      const ndviUrl  = overlayUrlParam || fallbackNdviUrl;
-      const op  = overlayOpacityParam ? Math.max(0, Math.min(1, parseFloat(overlayOpacityParam))) : 0.65;
-    
-      // 既存 overlay をこのデモに限り上書き
-      meta.overlay = { type: 'image', url: ndviUrl, bbox, opacity: op };
-    
-      // 表示をNDVIっぽく（overlay_mode=ndvi なら凡例/説明も上書き）
-      if (overlayModeParam === 'ndvi' || !meta.legend) {
-        meta.legend = [
-          { label: '低NDVI', color: '#e6f4e6' },
-          { label: '高NDVI', color: '#1f7a1f' }
-        ];
-        meta.scenario = (meta.scenario || '') + '（NDVIオーバーレイ：低→高で薄緑→濃緑）';
-      }
-    }
-
-    // 地域センタリング微調整
-    if(/札幌/i.test(form.region)) meta.center=[43.06,141.35];
-    if(/北海道/i.test(form.region)) meta.center=[43.22,142.86];
-    if(/福岡/i.test(form.region)) meta.center=[33.59,130.40];
-
-    document.getElementById('demoMeta').textContent =
-      `${meta.title}｜最終観測: ${meta.last_obs||'—'}｜提供: ${meta.provider||'—'}｜データ源: ${meta.data_source||meta.data_sources||'—'}`;
-
-    // 出典の動的切り替え
-    const creditEl = document.getElementById('creditNote');
-    (function setCredit(){
-      // まず非表示
-      if (creditEl) {
-        creditEl.style.display = 'none';
-        creditEl.innerHTML = '';
-      }
-      // 1) 明示的にオーバーレイURLが来ているとき（クエリで overlay_url 指定）→ 出典が決められるならここでセット
-      if (demoId === 'forestry_hokkaido_202405') {
-        // 森林デモだけSorabatakeを既定に
-        const credit = DEMO_CREDIT[demoId];
-        if (credit && creditEl) {
-          creditEl.innerHTML = `出典画像: <a href="${credit.href}" target="_blank" rel="noopener">${credit.label}</a>`;
-          creditEl.style.display = 'block';
-        }
-      } else {
-        // 2) その他のデモは、登録があれば出す
-        const credit = DEMO_CREDIT[demoId];
-        if (credit && creditEl) {
-          creditEl.innerHTML = `出典: <a href="${credit.href}" target="_blank" rel="noopener">${credit.label}</a>`;
-          creditEl.style.display = 'block';
-        }
-      }
-    })();
-    
-    ensureMap(meta.center, meta.zoom||12);
-
-    // オーバーレイをクリア
-    if(overlayTile){ overlayTile.remove(); overlayTile=null; }
-    if(overlayImage){ overlayImage.remove(); overlayImage=null; }
-    Object.values(vectorLayers).forEach(v=>v.remove()); vectorLayers = {};
-
-    if(meta.tileUrl){
-      overlayTile = L.tileLayer(meta.tileUrl,{maxZoom:19,opacity:.85}).addTo(map);
-    }
-    if(meta.overlay && meta.overlay.type==='image' && meta.overlay.url && Array.isArray(meta.overlay.bbox)){
-      const b = meta.overlay.bbox; // [minX, minY, maxX, maxY]
-      const imgBounds = [[b[1], b[0]], [b[3], b[2]]];
-      overlayImage = L.imageOverlay(meta.overlay.url, imgBounds, {opacity: meta.overlay.opacity ?? 0.8}).addTo(map);
-      addOpacityControl(overlayImage, meta.overlay.opacity ?? 0.8);
-    }else if(overlayTile){
-      addOpacityControl(overlayTile, 0.85);
-    }
-
-    if(Array.isArray(meta.layers)){
-      for(const lyr of meta.layers){
-        if(lyr.type==='geojson' && lyr.url){
-          try{
-            const res = await fetch(lyr.url,{cache:'no-store'});
-            if(res.ok){
-              const gj = await res.json();
-              const style = lyr.style || {color:'#22d3ee',weight:1,opacity:.6,fillOpacity:0.0};
-              vectorLayers[lyr.id] = L.geoJSON(gj,{style}).addTo(map);
-            }
-          }catch(e){ console.warn('vector layer load failed', lyr.url); }
-        }
-      }
-    }
-
-    // 凡例／メトリクス／CTA
-    legendEl.innerHTML='';
-    (meta.legend||[]).forEach(it=>{
-      const d=document.createElement('div'); d.className='item';
-      const sw=document.createElement('span'); sw.className='sw';
-      sw.style.background = it.color || '#334155';
-      sw.textContent = it.icon || '';
-      const t=document.createElement('span'); t.textContent=it.label||''; d.appendChild(sw); d.appendChild(t);
-      legendEl.appendChild(d);
+  // ---- 起動：単一JSONを読む ----
+  fetch('public/demos/demos.json', {cache:'no-store'})
+    .then(r=>r.json())
+    .then(json=>{
+      DEMOS = json.demos||[];
+      renderResults(DEMOS);
+      const initial = forceDemoId || json.default_demo_id || (DEMOS[0]?.id);
+      if(initial) openDemoDoc(initial);
+    })
+    .catch(()=>{
+      docEl.innerHTML='<div class="note">demos.json の読込に失敗しました。</div>';
     });
-    renderMetrics(meta.metrics);
-    scenarioEl.textContent = meta.scenario || meta.scenario_text || 'このデモの活用ストーリーは準備中です。';
-
-    demoActionsEl.innerHTML='';
-    const btnLocal=document.createElement('button'); btnLocal.className='btn btn-primary';
-    btnLocal.textContent='自分の地域でも試せますか？';
-    btnLocal.onclick=()=> window.open((meta.cta?.href || 'mailto:contact@example.com?subject=デモ相談&body=地域: '+(form.region||'')), '_blank','noopener');
-    demoActionsEl.appendChild(btnLocal);
-    if(meta.cta && meta.cta.href){
-      const btn=document.createElement('a'); btn.className='btn btn-ghost'; btn.textContent=meta.cta.text||'相談する';
-      btn.href=meta.cta.href; btn.target='_blank'; btn.rel='noopener';
-      demoActionsEl.appendChild(btn);
-    }
-
-    overlayEl.style.display='none';
-    if(scrollToScenario) scenarioEl.scrollIntoView({behavior:'smooth',block:'nearest'});
-  }
-
-  // 初期描画
-  renderFormChips();
-  renderResults();
 });
 </script>
 </body>
