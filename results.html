@@ -82,7 +82,15 @@ document.addEventListener('DOMContentLoaded', () => {
     region:   qs.get('region')||''
   };
 
-  function esc(s=''){ return s.replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\\'':'&#39;'}[c])); }
+  function esc(s=''){
+    return s.replace(/[&<>\"']/g, c => ({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      '"':'&quot;',
+      "'":'&#39;'
+    }[c]));
+  }
   function chip(text){ const span=document.createElement('span'); span.className='chip'; span.textContent=text; chips.appendChild(span); }
   if(form.industry) chip('業界: '+form.industry);
   if(form.region)   chip('地域: '+form.region);
