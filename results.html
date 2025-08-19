@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
       "'":'&#39;'
     }[c]));
   }
+
   function chip(text){ const span=document.createElement('span'); span.className='chip'; span.textContent=text; chips.appendChild(span); }
   if(form.industry) chip('業界: '+form.industry);
   if(form.region)   chip('地域: '+form.region);
@@ -101,11 +102,38 @@ document.addEventListener('DOMContentLoaded', () => {
   function tokenize(s=''){ return s.toLowerCase().replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).split(/[^\p{Letter}\p{Number}]+/u).filter(Boolean); }
   function jaccard(a,b){ const A=new Set(a),B=new Set(b); const inter=[...A].filter(x=>B.has(x)).length; const uni=new Set([...A,...B]).size; return uni?inter/uni:0; }
 
+  function normalizeJa(s=''){
+    return s.toLowerCase()
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0))
+      .replace(/\s+/g,'');
+  }
+  const KPI_SYNONYM = {
+    'コスト削減':   ['コスト','費用','原価','コスト削減','コスト低減'],
+    '品質向上':     ['品質','歩留まり','精度','欠陥','不良','品質向上'],
+    '工数・省力化': ['工数','省力','省人','省力化','自動化','効率','効率化','DX'],
+    '安全・リスク': ['安全','リスク','危険','事故','災害','ヒヤリ','レジリエンス'],
+    '進捗可視化':   ['進捗','可視化','見える化','監視','モニタ','トラッキング'],
+    'ESG/CO2':     ['esg','co2','co₂','排出','温室効果ガス','ghg','サステナ']
+  };
+  function kpiHitText(text, selected){
+    const t = normalizeJa(text||'');
+    return selected.some(k => {
+      const keys = KPI_SYNONYM[k] || [k];
+      return keys.some(word => t.includes(normalizeJa(word)));
+    });
+  }
+  
   function score(c){
     let s=0, reasons=[];
     if(form.industry && c.industry===form.industry){ s+=3; reasons.push('業界一致'); }
     if(form.needs.length && form.needs.includes(c.business_need)){ s+=3; reasons.push('課題一致'); }
-    if(form.kpis.length && form.kpis.some(k => (c.kpi||'').includes(k))){ s+=1; reasons.push('KPI含有'); }
+  
+    // KPIは problem/solution/kpi の全文でシノニム検索
+    if(form.kpis.length){
+      const text = [c.problem,c.solution,c.kpi].join(' ');
+      if(kpiHitText(text, form.kpis)){ s+=1; reasons.push('KPI含有'); }
+    }
+  
     if(form.q){
       const sim = jaccard(tokenize(form.q), tokenize([c.problem,c.solution,c.kpi,c.reference].join(' ')));
       const pts = Math.min(3, Math.round(sim*4)); if(pts>0){ s+=pts; reasons.push(`文章類似 ${(sim*100|0)}%`); }
@@ -183,26 +211,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let CASES=[];
 
-  fetch('cases-db.json',{cache:'no-store'}).then(r=>{
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    return r.json();
-  }).then(json=>{
-    CASES = Array.isArray(json)?json:(json.cases||[]);
-
-    const base = CASES.filter(c=>{
-      const okInd = !form.industry || c.industry===form.industry;
-      const okNeed= !form.needs.length || form.needs.includes(c.business_need);
-      const okKw  = !form.q || [c.problem,c.solution,c.kpi,c.reference].some(v => (v||'').toLowerCase().includes(form.q.toLowerCase()));
-      const okKpi = !form.kpis.length || form.kpis.some(k => (c.kpi||'').includes(k));
-      return okInd && okNeed && okKw && okKpi;
-    }).map(c=>({ ...c, _rank: score(c) }))
-      .filter(x=>x._rank.score>0)
-      .sort((a,b)=>b._rank.score-a._rank.score);
-
-    render(base);
-  }).catch(err=>{
-    detail.innerHTML = '<div class="step">cases-db.json の読込に失敗しました。index.html と同じ階層に配置し、パスを合わせてください。<br>エラー: '+esc(err.message)+'</div>';
-  });
+  fetch('cases-db.json',{cache:'no-store'})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(json=>{
+      CASES = Array.isArray(json)?json:(json.cases||[]);
+  
+      const base = CASES.filter(c=>{
+        const okInd = !form.industry || c.industry===form.industry;
+        const okNeed= !form.needs.length || form.needs.includes(c.business_need);
+        const okKw  = !form.q || [c.problem,c.solution,c.kpi,c.reference]
+                        .some(v => (v||'').toLowerCase().includes(form.q.toLowerCase()));
+        return okInd && okNeed && okKw; // KPIでは絞り込まない
+      });
+  
+      const ranked = base
+        .map(c=>({ ...c, _rank: score(c) }))
+        .filter(x=>x._rank.score>0)
+        .sort((a,b)=>b._rank.score-a._rank.score);
+  
+      render(ranked);
+    })
+    .catch(err=>{
+      detail.innerHTML = '<div class="step">cases-db.json の読込に失敗しました。index.html と同じ階層に配置し、パスを合わせてください。<br>エラー: '+esc(err.message)+'</div>';
+    });
 });
 </script>
 </body>
