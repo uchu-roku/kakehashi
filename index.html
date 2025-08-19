@@ -69,6 +69,14 @@
     .footer { margin-top: 16px; color: var(--muted); font-size: 12px; }
     .badges { display:flex; gap:8px; flex-wrap: wrap; }
     .tag { padding: 6px 10px; border-radius: 999px; background:#0f1733; border:1px solid var(--border); font-size:12px; color:#b7c7ff; }
+
+    .chips{display:flex;flex-wrap:wrap;gap:8px}
+    .chip{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 12px;border-radius:999px;background:#0f1733;
+      border:1px solid var(--border);color:#b7c7ff;cursor:pointer;user-select:none;font-size:13px;
+    }
+    .chip.active{border-color:#5b8cff;box-shadow:0 0 0 1px #5b8cff33 inset}
   </style>
 </head>
 <body>
@@ -95,11 +103,9 @@
           <div class="hint">cases-db.json から自動抽出</div>
         </div>
         <div>
-          <label for="need">一般的なビジネス課題（Business Need）</label>
-          <select id="need">
-            <option value="">— 選択してください —</option>
-          </select>
-          <div class="hint">例：コスト削減 / 品質向上 / 労務省力化 / 安全・リスク低減 / 進捗可視化 / ESG/CO2対応</div>
+          <label>一般的なビジネス課題（複数選択）</label>
+          <div id="needChips" class="chips" role="group" aria-label="Business Needs"></div>
+          <div class="hint">クリックで選択／解除。複数選択できます。</div>
         </div>
       </div>
 
@@ -110,16 +116,8 @@
           <div class="hint">あなたの言葉で課題を書いてください。結果の並び順に反映されます。</div>
         </div>
         <div>
-          <label for="kpi">重視するKPI（任意）</label>
-          <select id="kpi">
-            <option value="">— 指標を選択（任意） —</option>
-            <option value="コスト">コスト削減</option>
-            <option value="品質">品質向上</option>
-            <option value="工数">工数・省力化</option>
-            <option value="安全">安全・リスク</option>
-            <option value="進捗">進捗可視化</option>
-            <option value="ESG">ESG/CO2</option>
-          </select>
+          <label>重視するKPI（複数選択・任意）</label>
+          <div id="kpiChips" class="chips" role="group" aria-label="KPIs"></div>
           <div class="hint">KPIは並び替えやハイライトの参考にします。</div>
         </div>
       </div>
@@ -140,74 +138,81 @@
   </main>
 
   <script>
-    const state = {
-      cases: [],
-      industries: new Set(),
-      needs: new Set(),
-    };
-
-    // Load cases-db.json and populate selectors
+    const state = { cases: [], industries: new Set(), needs: new Set() };
+  
+    const NEEDS_FALLBACK = [
+      'コスト削減','品質向上','安全・リスク低減','監視の自動化','進捗可視化','ESG/CO2','需要予測','被害推定','在庫把握'
+    ];
+    const KPI_FALLBACK = ['コスト削減','品質向上','工数・省力化','安全・リスク','進捗可視化','ESG/CO2'];
+  
+    const elIndustry = document.getElementById('industry');
+    const elNeedChips = document.getElementById('needChips');
+    const elKpiChips = document.getElementById('kpiChips');
+  
+    function makeChip(text, container){
+      const span = document.createElement('span');
+      span.className = 'chip';
+      span.textContent = text;
+      span.addEventListener('click', () => { span.classList.toggle('active'); renderPreview(); });
+      container.appendChild(span);
+    }
+    function selectedTexts(container){
+      return Array.from(container.querySelectorAll('.chip.active')).map(s => s.textContent);
+    }
+  
     async function loadCases() {
       try {
         const res = await fetch('cases-db.json', { cache: 'no-store' });
+        if(!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        state.cases = data;
-
-        // Collect unique industries & needs
-        data.forEach(item => {
-          if (item.industry) state.industries.add(item.industry);
-          if (item.business_need) state.needs.add(item.business_need);
-        });
-
-        // Populate selectors
-        const indSel = document.getElementById('industry');
+        state.cases = Array.isArray(data) ? data : (data.cases || []);
+  
+        state.industries = new Set(state.cases.map(i => i.industry).filter(Boolean));
+        state.needs      = new Set(state.cases.map(i => i.business_need).filter(Boolean));
+  
+        // 業界
         [...state.industries].sort().forEach(v => {
-          const opt = document.createElement('option');
-          opt.value = v; opt.textContent = v;
-          indSel.appendChild(opt);
+          const opt = document.createElement('option'); opt.value = v; opt.textContent = v; elIndustry.appendChild(opt);
         });
-
-        const needSel = document.getElementById('need');
-        [...state.needs].sort().forEach(v => {
-          const opt = document.createElement('option');
-          opt.value = v; opt.textContent = v;
-          needSel.appendChild(opt);
-        });
-
+        // 課題チップ
+        elNeedChips.innerHTML=''; [...state.needs].sort().forEach(v => makeChip(v, elNeedChips));
+        // KPIチップ
+        elKpiChips.innerHTML=''; KPI_FALLBACK.forEach(v => makeChip(v, elKpiChips));
+  
         renderPreview();
       } catch (e) {
-        document.getElementById('preview').textContent = 'cases-db.json の読み込みに失敗しました。配置パスをご確認ください。';
-        console.error(e);
+        // フォールバック（JSONが404でも動作）
+        document.getElementById('preview').textContent = 'cases-db.json の読み込みに失敗しました（' + e.message + '）。固定候補で動作します。';
+        ['農業','林業','災害/保険','水環境/養殖','エネルギー/排出監視','インフラ点検/建設'].forEach(v => {
+          const opt = document.createElement('option'); opt.value = v; opt.textContent = v; elIndustry.appendChild(opt);
+        });
+        elNeedChips.innerHTML=''; NEEDS_FALLBACK.forEach(v => makeChip(v, elNeedChips));
+        elKpiChips.innerHTML=''; KPI_FALLBACK.forEach(v => makeChip(v, elKpiChips));
       }
     }
-
+  
     function filterCases() {
-      const industry = document.getElementById('industry').value.trim();
-      const need = document.getElementById('need').value.trim();
-      const q = document.getElementById('keywords').value.trim();
-
-      const kw = q ? q.toLowerCase() : '';
-
+      const industry = elIndustry.value.trim();
+      const needs = selectedTexts(elNeedChips); // 複数
+      const q = document.getElementById('keywords').value.trim().toLowerCase();
+  
       return state.cases.filter(c => {
         const okIndustry = !industry || c.industry === industry;
-        const okNeed = !need || c.business_need === need;
-        const okKw = !kw || (
-          (c.problem && c.problem.toLowerCase().includes(kw)) ||
-          (c.solution && c.solution.toLowerCase().includes(kw)) ||
-          (c.kpi && c.kpi.toLowerCase().includes(kw))
+        const okNeeds = !needs.length || needs.includes(c.business_need);
+        const okKw = !q || (
+          (c.problem && c.problem.toLowerCase().includes(q)) ||
+          (c.solution && c.solution.toLowerCase().includes(q)) ||
+          (c.kpi && c.kpi.toLowerCase().includes(q))
         );
-        return okIndustry && okNeed && okKw;
+        return okIndustry && okNeeds && okKw;
       });
     }
-
+  
     function renderPreview() {
+      if(!state.cases.length){ return; } // フォールバック時は件数プレビュー無し
       const list = filterCases();
       const box = document.getElementById('preview');
-      if (!list.length) {
-        box.innerHTML = '該当する事例がまだありません。条件を調整してください。';
-        return;
-      }
-      // show top 3
+      if (!list.length) { box.innerHTML = '該当する事例がまだありません。条件を調整してください。'; return; }
       const top = list.slice(0, 3);
       const html = [`<div>該当 <b>${list.length}</b> 件</div>`]
         .concat(top.map(c => `
@@ -219,35 +224,28 @@
         </div>`)).join('');
       box.innerHTML = html;
     }
-
-    // Wire events
-    ['industry','need','keywords','kpi'].forEach(id => {
-      document.addEventListener('change', (e) => {
-        if (e.target && e.target.id === id) renderPreview();
-      }, true);
-      document.addEventListener('input', (e) => {
-        if (e.target && e.target.id === id) renderPreview();
-      }, true);
-    });
-
+  
     document.getElementById('resetBtn').addEventListener('click', () => {
-      document.getElementById('industry').value = '';
-      document.getElementById('need').value = '';
+      elIndustry.value = '';
+      document.querySelectorAll('.chip.active').forEach(el => el.classList.remove('active'));
       document.getElementById('keywords').value = '';
-      document.getElementById('kpi').value = '';
       renderPreview();
     });
-
+  
     document.getElementById('submitBtn').addEventListener('click', () => {
-      const industry = encodeURIComponent(document.getElementById('industry').value.trim());
-      const need = encodeURIComponent(document.getElementById('need').value.trim());
+      const industry = encodeURIComponent(elIndustry.value.trim());
+      const needs = encodeURIComponent(selectedTexts(elNeedChips).join(','));  // 複数をカンマ連結
       const q = encodeURIComponent(document.getElementById('keywords').value.trim());
-      const kpi = encodeURIComponent(document.getElementById('kpi').value.trim());
-      const url = `results.html?industry=${industry}&need=${need}&q=${q}&kpi=${kpi}`;
+      const kpis = encodeURIComponent(selectedTexts(elKpiChips).join(','));
+      const url = `results.html?industry=${industry}&need=${needs}&q=${q}&kpi=${kpis}`;
       window.location.href = url;
     });
-
+  
+    elIndustry.addEventListener('change', renderPreview);
+    document.getElementById('keywords').addEventListener('input', renderPreview);
+  
     loadCases();
   </script>
+
 </body>
 </html>
